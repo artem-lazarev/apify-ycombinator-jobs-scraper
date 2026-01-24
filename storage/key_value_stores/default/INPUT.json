@@ -1,8 +1,6 @@
 {
   "filterByBatch": [],
-  "filterByIndustry": [
-    "Fintech"
-  ],
+  "filterByIndustry": ["Fintech"],
   "filterByStage": [],
   "filterByLocation": [],
   "topCompaniesOnly": false,

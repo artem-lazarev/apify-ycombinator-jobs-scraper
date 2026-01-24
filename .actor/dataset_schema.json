@@ -1,251 +1,113 @@
 {
-    "actorSpecification": 1,
-    "fields": {
-        "company": {
-            "type": "object",
-            "title": "Company",
-            "description": "Company information from Y Combinator",
-            "properties": {
-                "id": { "type": "integer", "title": "Company ID" },
-                "name": { "type": "string", "title": "Company Name" },
-                "slug": { "type": "string", "title": "Slug" },
-                "formerNames": { "type": "array", "title": "Former Names", "items": { "type": "string" } },
-                "tagline": { "type": "string", "title": "Tagline" },
-                "longDescription": { "type": "string", "title": "Description" },
-                "website": { "type": "string", "title": "Website", "format": "uri" },
-                "logoUrl": { "type": "string", "title": "Logo URL", "format": "uri" },
-                "ycUrl": { "type": "string", "title": "YC Profile URL", "format": "uri" },
-                "ycBatch": { "type": "string", "title": "YC Batch" },
-                "foundedYear": { "type": "integer", "title": "Founded Year" },
-                "teamSize": { "type": "integer", "title": "Team Size" },
-                "status": { "type": "string", "title": "Status" },
-                "stage": { "type": "string", "title": "Stage" },
-                "industry": { "type": "string", "title": "Industry" },
-                "subindustry": { "type": "string", "title": "Sub-industry" },
-                "industries": { "type": "array", "title": "Industries", "items": { "type": "string" } },
-                "tags": { "type": "array", "title": "Tags", "items": { "type": "string" } },
-                "topCompany": { "type": "boolean", "title": "Top Company" },
-                "allLocations": { "type": "string", "title": "Locations" },
-                "regions": { "type": "array", "title": "Regions", "items": { "type": "string" } },
-                "socialLinks": {
-                    "type": "object",
-                    "title": "Social Links",
-                    "properties": {
-                        "linkedin": { "type": "string", "title": "LinkedIn", "format": "uri" },
-                        "twitter": { "type": "string", "title": "Twitter", "format": "uri" },
-                        "github": { "type": "string", "title": "GitHub", "format": "uri" },
-                        "facebook": { "type": "string", "title": "Facebook", "format": "uri" },
-                        "crunchbase": { "type": "string", "title": "Crunchbase", "format": "uri" }
-                    }
-                }
-            }
-        },
-        "founders": {
-            "type": "array",
-            "title": "Founders",
-            "description": "List of company founders",
-            "items": {
-                "type": "object",
-                "properties": {
-                    "name": { "type": "string", "title": "Name" },
-                    "role": { "type": "string", "title": "Role" },
-                    "description": { "type": "string", "title": "Description" },
-                    "linkedin": { "type": "string", "title": "LinkedIn", "format": "uri" },
-                    "twitter": { "type": "string", "title": "Twitter", "format": "uri" }
-                }
-            }
-        },
-        "jobs": {
-            "type": "array",
-            "title": "Jobs",
-            "description": "List of job openings at the company",
-            "items": {
-                "type": "object",
-                "properties": {
-                    "jobId": { "type": "string", "title": "Job ID" },
-                    "title": { "type": "string", "title": "Job Title" },
-                    "jobUrl": { "type": "string", "title": "Job URL", "format": "uri" },
-                    "location": { "type": "string", "title": "Location" },
-                    "salary": {
-                        "type": "object",
-                        "title": "Salary",
-                        "properties": {
-                            "min": { "type": "integer", "title": "Minimum" },
-                            "max": { "type": "integer", "title": "Maximum" },
-                            "currency": { "type": "string", "title": "Currency" },
-                            "period": { "type": "string", "title": "Period" }
-                        }
-                    },
-                    "equity": {
-                        "type": "object",
-                        "title": "Equity",
-                        "properties": {
-                            "min": { "type": "number", "title": "Minimum %" },
-                            "max": { "type": "number", "title": "Maximum %" }
-                        }
-                    },
-                    "jobType": { "type": "string", "title": "Job Type" },
-                    "roleCategory": { "type": "string", "title": "Role Category" },
-                    "experience": { "type": "string", "title": "Experience Required" },
-                    "visa": { "type": "string", "title": "Visa Sponsorship" },
-                    "description": { "type": "string", "title": "Job Description" },
-                    "interviewProcess": { "type": "string", "title": "Interview Process" }
-                }
-            }
-        },
-        "scrapedAt": {
-            "type": "string",
-            "title": "Scraped At",
-            "description": "Timestamp when the data was scraped",
-            "format": "date-time"
+  "actorSpecification": 1,
+  "views": {
+    "overview": {
+      "title": "YC Companies & Jobs",
+      "transformation": {
+        "flatten": ["company"],
+        "fields": [
+          "company.logoUrl",
+          "company.name",
+          "company.website",
+          "company.longDescription",
+          "jobs",
+          "founders",
+          "company.ycBatch",
+          "company.foundedYear",
+          "company.teamSize",
+          "company.industry",
+          "company.status",
+          "company.stage",
+          "company.allLocations",
+          "company.regions",
+          "company.tags",
+          "company.topCompany",
+          "company.ycUrl",
+          "company.socialLinks",
+          "scrapedAt"
+        ]
+      },
+      "display": {
+        "component": "table",
+        "properties": {
+          "company.logoUrl": {
+            "label": "Logo",
+            "format": "image"
+          },
+          "company.name": {
+            "label": "Company",
+            "format": "text"
+          },
+          "company.website": {
+            "label": "Website",
+            "format": "link"
+          },
+          "company.longDescription": {
+            "label": "Description",
+            "format": "text"
+          },
+          "jobs": {
+            "label": "Open Jobs",
+            "format": "array"
+          },
+          "founders": {
+            "label": "Founders",
+            "format": "array"
+          },
+          "company.ycBatch": {
+            "label": "YC Batch",
+            "format": "text"
+          },
+          "company.foundedYear": {
+            "label": "Founded",
+            "format": "number"
+          },
+          "company.teamSize": {
+            "label": "Team Size",
+            "format": "number"
+          },
+          "company.industry": {
+            "label": "Industry",
+            "format": "text"
+          },
+          "company.status": {
+            "label": "Status",
+            "format": "text"
+          },
+          "company.stage": {
+            "label": "Stage",
+            "format": "text"
+          },
+          "company.allLocations": {
+            "label": "Location",
+            "format": "text"
+          },
+          "company.regions": {
+            "label": "Regions",
+            "format": "array"
+          },
+          "company.tags": {
+            "label": "Tags",
+            "format": "array"
+          },
+          "company.topCompany": {
+            "label": "Top Company",
+            "format": "boolean"
+          },
+          "company.ycUrl": {
+            "label": "YC Profile",
+            "format": "link"
+          },
+          "company.socialLinks": {
+            "label": "Social Links",
+            "format": "object"
+          },
+          "scrapedAt": {
+            "label": "Scraped At",
+            "format": "date"
+          }
         }
-    },
-    "views": {
-        "companies": {
-            "title": "Companies Overview",
-            "transformation": {
-                "fields": [
-                    "company.logoUrl",
-                    "company.name",
-                    "company.tagline",
-                    "company.longDescription",
-                    "founders",
-                    "jobs",
-                    "company.website",
-                    "company.industry",
-                    "company.ycBatch",
-                    "company.teamSize",
-                    "company.stage",
-                    "company.allLocations"
-                ]
-            },
-            "display": {
-                "component": "table",
-                "properties": {
-                    "company.logoUrl": {
-                        "label": "Logo",
-                        "format": "image"
-                    },
-                    "company.name": {
-                        "label": "Company",
-                        "format": "text"
-                    },
-                    "company.tagline": {
-                        "label": "Tagline",
-                        "format": "text"
-                    },
-                    "company.longDescription": {
-                        "label": "Description",
-                        "format": "text"
-                    },
-                    "founders": {
-                        "label": "Founders",
-                        "format": "array"
-                    },
-                    "jobs": {
-                        "label": "Open Jobs",
-                        "format": "array"
-                    },
-                    "company.website": {
-                        "label": "Website",
-                        "format": "link"
-                    },
-                    "company.industry": {
-                        "label": "Industry",
-                        "format": "text"
-                    },
-                    "company.ycBatch": {
-                        "label": "YC Batch",
-                        "format": "text"
-                    },
-                    "company.teamSize": {
-                        "label": "Team Size",
-                        "format": "number"
-                    },
-                    "company.stage": {
-                        "label": "Stage",
-                        "format": "text"
-                    },
-                    "company.allLocations": {
-                        "label": "Locations",
-                        "format": "text"
-                    }
-                }
-            }
-        },
-        "jobs": {
-            "title": "Job Listings",
-            "transformation": {
-                "flatten": ["jobs"],
-                "unwind": ["jobs"],
-                "fields": [
-                    "company.name",
-                    "company.logoUrl",
-                    "company.ycBatch",
-                    "jobs.title",
-                    "jobs.jobUrl",
-                    "jobs.location",
-                    "jobs.jobType",
-                    "jobs.roleCategory",
-                    "jobs.experience",
-                    "jobs.visa",
-                    "jobs.salary",
-                    "jobs.equity"
-                ]
-            },
-            "display": {
-                "component": "table",
-                "properties": {
-                    "company.logoUrl": {
-                        "label": "Logo",
-                        "format": "image"
-                    },
-                    "company.name": {
-                        "label": "Company",
-                        "format": "text"
-                    },
-                    "company.ycBatch": {
-                        "label": "YC Batch",
-                        "format": "text"
-                    },
-                    "jobs.title": {
-                        "label": "Job Title",
-                        "format": "text"
-                    },
-                    "jobs.jobUrl": {
-                        "label": "Apply",
-                        "format": "link"
-                    },
-                    "jobs.location": {
-                        "label": "Location",
-                        "format": "text"
-                    },
-                    "jobs.jobType": {
-                        "label": "Type",
-                        "format": "text"
-                    },
-                    "jobs.roleCategory": {
-                        "label": "Category",
-                        "format": "text"
-                    },
-                    "jobs.experience": {
-                        "label": "Experience",
-                        "format": "text"
-                    },
-                    "jobs.visa": {
-                        "label": "Visa",
-                        "format": "text"
-                    },
-                    "jobs.salary": {
-                        "label": "Salary",
-                        "format": "object"
-                    },
-                    "jobs.equity": {
-                        "label": "Equity",
-                        "format": "object"
-                    }
-                }
-            }
-        }
+      }
     }
+  }
 }
