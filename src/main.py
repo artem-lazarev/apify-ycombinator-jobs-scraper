@@ -274,6 +274,8 @@ async def process_company(
         
         # Build jobs - get basic info from company page, then enrich with job page details
         jobs = []
+        job_page_founders = []  # Backup founders from job pages
+        
         for job_data in company_parsed.get('jobs', []):
             job_id = job_data.get('jobId', '')
             
@@ -286,6 +288,13 @@ async def process_company(
                 if job_html:
                     # Parse job page for full details
                     job_page_data = parse_job_page(job_html)
+                    
+                    # Extract founders from job page as backup (if company page has none)
+                    if not founders and not job_page_founders:
+                        job_founders_data = job_page_data.get('founders', [])
+                        if job_founders_data:
+                            job_page_founders = job_founders_data
+                            logger.info(f"Found {len(job_page_founders)} founders on job page for {slug}")
                     
                     # Merge job data: prefer job page data, fall back to company page data
                     merged_job_data = {
@@ -312,6 +321,11 @@ async def process_company(
             
             if job and job.title:
                 jobs.append(job)
+        
+        # If no founders from company page, use founders from job page
+        if not founders and job_page_founders:
+            founders = build_founders_from_parsed(job_page_founders)
+            logger.info(f"Using {len(founders)} founders from job page for {slug}")
         
         # Build output
         output = CompanyOutput(

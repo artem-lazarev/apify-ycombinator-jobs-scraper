@@ -222,9 +222,10 @@ def _extract_founders(soup: BeautifulSoup) -> List[Dict]:
         if not alt_text or any(term.lower() in alt_text.lower() for term in skip_terms):
             continue
         
-        # Check if it looks like a name (2-4 words, capitalized)
+        # Check if it looks like a name (2-4 words)
+        # Note: Don't require capitalization - some founders use lowercase names (e.g., "matt debergalis")
         words = alt_text.split()
-        if len(words) >= 2 and len(words) <= 4 and words[0][0].isupper():
+        if len(words) >= 2 and len(words) <= 4:
             # IMPORTANT: Only include names that actually appear in the founders section text
             # This prevents picking up random images from other parts of the page
             if alt_text in founders_text and alt_text not in founder_names:
@@ -312,6 +313,153 @@ def _extract_founders(soup: BeautifulSoup) -> List[Dict]:
                         founder['twitter'] = href
         
         founders.append(founder)
+    
+    return founders
+
+
+def _extract_founders_from_job_page(soup: BeautifulSoup) -> List[Dict]:
+    """
+    Extract founders from the job page.
+    
+    Job pages have a "Founders" section (NOT "Active Founders") with simpler cards:
+    - The card is in a div with class "ycdc-card-new"
+    - Each founder has: image (with name as alt), name text, LinkedIn link, role
+    
+    This is used as a backup when the company page has no active founders.
+    
+    IMPORTANT: We must NOT pick up company logos from "Similar Jobs" section!
+    """
+    founders = []
+    seen_names = set()
+    
+    # Find "Founders" heading on job page (note: NOT "Active Founders")
+    founders_heading = None
+    for elem in soup.find_all(string=lambda text: text and text.strip() == 'Founders' if text else False):
+        # Make sure it's just "Founders", not "Active Founders"
+        founders_heading = elem
+        break
+    
+    if not founders_heading:
+        return founders
+    
+    # Find the founder cards - they are in divs with class "ycdc-card-new" near the Founders heading
+    # First, get the parent that contains the "Founders" heading
+    founders_parent = founders_heading.find_parent(['div', 'section'])
+    if not founders_parent:
+        return founders
+    
+    # Find the specific founder card container - look for ycdc-card-new class
+    # Go up only 2-3 levels to find the card container, not the entire page
+    founder_cards_container = None
+    container = founders_parent
+    for _ in range(3):
+        if container.parent:
+            container = container.parent
+            # Look for the ycdc-card-new div within this container
+            card_divs = container.find_all('div', class_=lambda c: c and 'ycdc-card' in c)
+            if card_divs:
+                # Check if this container has personal LinkedIn links (founder links)
+                # but is NOT the Similar Jobs section
+                container_text = container.get_text()
+                if 'Similar Jobs' not in container_text:
+                    founder_cards_container = container
+                    break
+    
+    if not founder_cards_container:
+        # Fallback: just use immediate parent of Founders heading
+        founder_cards_container = founders_parent
+        for _ in range(2):
+            if founder_cards_container.parent:
+                founder_cards_container = founder_cards_container.parent
+    
+    # Now extract founders, but be very careful to only look in the founders section
+    # Get text boundaries - stop at "Similar Jobs" or other sections
+    container_text = founder_cards_container.get_text()
+    
+    # Find where founders section ends
+    similar_jobs_idx = container_text.find('Similar Jobs')
+    if similar_jobs_idx != -1:
+        # Limit our search to before "Similar Jobs"
+        founders_section_text = container_text[:similar_jobs_idx]
+    else:
+        founders_section_text = container_text
+    
+    # Find all images that are BEFORE the Similar Jobs section
+    for img in founder_cards_container.find_all('img', alt=True):
+        alt_text = img.get('alt', '').strip()
+        
+        # Skip non-person images
+        skip_terms = ['Twitter', 'LinkedIn', 'Logo', 'photo', 'image', 'icon', 'video', 
+                      'YouTube', 'Y Combinator', 'Combinator', 'YC', 'logo']
+        if not alt_text or any(term.lower() in alt_text.lower() for term in skip_terms):
+            continue
+        
+        # Check if it looks like a name (2-4 words)
+        # Note: Don't require capitalization - some founders use lowercase names (e.g., "matt debergalis")
+        words = alt_text.split()
+        if len(words) < 2 or len(words) > 4:
+            continue
+        
+        # CRITICAL: Only include if the name appears in the founders section text (before Similar Jobs)
+        if alt_text not in founders_section_text:
+            continue
+        
+        if alt_text in seen_names:
+            continue
+        seen_names.add(alt_text)
+        
+        founder = {
+            'name': alt_text,
+            'role': None,
+            'description': None,
+            'linkedin': None,
+            'twitter': None
+        }
+        
+        # Find the founder card container - go up from the image
+        # The card should be small and contain: name, role, linkedin
+        card = img
+        for _ in range(5):
+            if card.parent:
+                card = card.parent
+                card_text = card.get_text()
+                card_links = card.find_all('a', href=True)
+                has_linkedin = any('linkedin.com/in/' in (l.get('href', '') or '').lower() for l in card_links)
+                
+                # Check if this contains the founder's name and has LinkedIn link
+                # But make sure it's not too big (not the whole page)
+                if alt_text in card_text and has_linkedin and len(card_text) < 500:
+                    break
+        
+        # Extract role from the card
+        role_keywords = ['CEO', 'CTO', 'COO', 'CFO', 'Founder', 'Co-founder', 'Cofounder', 
+                         'Partner', 'President', 'Co-Founder']
+        
+        card_text = card.get_text(separator='\n', strip=True)
+        lines = [line.strip() for line in card_text.split('\n') if line.strip()]
+        
+        for line in lines:
+            if line == alt_text:
+                continue
+            if any(keyword.lower() in line.lower() for keyword in role_keywords) and len(line) < 50:
+                founder['role'] = line
+                break
+        
+        # Extract LinkedIn and Twitter links from the card
+        for link in card.find_all('a', href=True):
+            href = link.get('href', '')
+            href_lower = href.lower()
+            
+            if 'linkedin.com/in/' in href_lower and not founder['linkedin']:
+                founder['linkedin'] = href
+            elif ('x.com/' in href_lower or 'twitter.com/' in href_lower) and not founder['twitter']:
+                # Skip company twitter
+                if '_HQ' not in href and 'ycombinator' not in href_lower:
+                    founder['twitter'] = href
+        
+        # Only add if we found a LinkedIn (confirms it's a real founder card)
+        if founder['name'] and founder['linkedin']:
+            founders.append(founder)
     
     return founders
 
@@ -731,6 +879,10 @@ def parse_job_page(html: str) -> Dict:
             sentences = re.split(r'(?<=[.!?])\s+', interview_text)
             if sentences:
                 result['interviewProcess'] = ' '.join(sentences[:3])
+    
+    # Extract founders from job page (backup when company page has no active founders)
+    # Job pages have a "Founders" section with cards containing name, LinkedIn, role
+    result['founders'] = _extract_founders_from_job_page(soup)
     
     return result
 
