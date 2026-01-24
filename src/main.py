@@ -7,8 +7,8 @@ import aiohttp
 from apify import Actor
 
 from .models import Company, CompanyOutput, Founder, Job, SocialLinks, Salary, Equity
-from .scraper import scrape_company_page
-from .parsers import parse_company_page
+from .scraper import scrape_company_page, scrape_job_page
+from .parsers import parse_company_page, parse_job_page
 
 logger = logging.getLogger(__name__)
 
@@ -153,7 +153,8 @@ def build_job_from_parsed(job_data: Dict, slug: str, job_id: str) -> Job:
         salary = Salary(
             min=job_data['salary'].get('min'),
             max=job_data['salary'].get('max'),
-            currency=job_data['salary'].get('currency', 'USD')
+            currency=job_data['salary'].get('currency', 'USD'),
+            period=job_data['salary'].get('period')
         )
     
     # Build equity
@@ -195,7 +196,8 @@ def build_job_from_company_page(job_data: Dict, slug: str) -> Job:
         salary = Salary(
             min=job_data['salary'].get('min'),
             max=job_data['salary'].get('max'),
-            currency=job_data['salary'].get('currency', 'USD')
+            currency=job_data['salary'].get('currency', 'USD'),
+            period=job_data['salary'].get('period')
         )
     
     # Build equity
@@ -230,16 +232,16 @@ def build_job_from_company_page(job_data: Dict, slug: str) -> Job:
 async def process_company(
     company_data: Dict[str, Any],
     include_founder_descriptions: bool = True,
+    include_job_details: bool = True,
     rate_limit_delay: float = 1.5
 ) -> Optional[CompanyOutput]:
     """
     Process a single company: scrape company page and extract all data.
     
-    Jobs are now parsed directly from the company page (faster, fewer requests).
-    
     Args:
         company_data: Company data from hiring.json
         include_founder_descriptions: Whether to scrape company page for founder descriptions
+        include_job_details: Whether to scrape individual job pages for full details
         rate_limit_delay: Delay between requests in seconds
     
     Returns:
@@ -261,7 +263,7 @@ async def process_company(
             logger.warning(f"Failed to scrape company page for {slug}")
             return None
         
-        # Parse company page - this now extracts social links, founders, AND jobs
+        # Parse company page - this extracts social links, founders, AND basic job info
         company_parsed = parse_company_page(company_html)
         
         # Build company model
@@ -270,10 +272,46 @@ async def process_company(
         # Build founders from parsed data
         founders = build_founders_from_parsed(company_parsed.get('founders', []))
         
-        # Build jobs from parsed data (jobs are now extracted from company page)
+        # Build jobs - get basic info from company page, then enrich with job page details
         jobs = []
         for job_data in company_parsed.get('jobs', []):
-            job = build_job_from_company_page(job_data, slug)
+            job_id = job_data.get('jobId', '')
+            
+            if include_job_details and job_id:
+                # Scrape individual job page for complete details
+                logger.info(f"Scraping job page: {slug}/jobs/{job_id}")
+                job_html = await scrape_job_page(slug, job_id)
+                await asyncio.sleep(rate_limit_delay)  # Rate limiting
+                
+                if job_html:
+                    # Parse job page for full details
+                    job_page_data = parse_job_page(job_html)
+                    
+                    # Merge job data: prefer job page data, fall back to company page data
+                    merged_job_data = {
+                        'jobId': job_id,
+                        'title': job_page_data.get('title') or job_data.get('title'),
+                        'location': job_page_data.get('location') or job_data.get('location'),
+                        'salary': job_page_data.get('salary') or job_data.get('salary'),
+                        'equity': job_page_data.get('equity') or job_data.get('equity'),
+                        'jobType': job_page_data.get('jobType'),
+                        'roleCategory': job_page_data.get('roleCategory'),
+                        'experience': job_page_data.get('experience') or job_data.get('experience'),
+                        'visa': job_page_data.get('visa'),
+                        'skills': job_page_data.get('skills', []),
+                        'description': job_page_data.get('description'),
+                        'interviewProcess': job_page_data.get('interviewProcess'),
+                        'applyUrl': job_page_data.get('applyUrl'),
+                    }
+                    
+                    job = build_job_from_parsed(merged_job_data, slug, job_id)
+                else:
+                    # Fallback to company page data only
+                    job = build_job_from_company_page(job_data, slug)
+            else:
+                # Use company page data only (faster but less complete)
+                job = build_job_from_company_page(job_data, slug)
+            
             if job and job.title:
                 jobs.append(job)
         
@@ -306,10 +344,11 @@ async def main():
         filter_by_location = input_data.get('filterByLocation', [])
         top_companies_only = input_data.get('topCompaniesOnly', False)
         include_founder_descriptions = input_data.get('includeFounderDescriptions', True)
+        include_job_details = input_data.get('includeJobDetails', True)
         rate_limit_delay = input_data.get('rateLimitDelay', 1.5)
         
         logger.info("Starting YC Jobs Scraper")
-        logger.info(f"Input: maxCompanies={max_companies}, filters={input_data}")
+        logger.info(f"Input: maxCompanies={max_companies}, includeJobDetails={include_job_details}, filters={input_data}")
         
         # Fetch hiring.json
         companies_data = await fetch_hiring_json()
@@ -332,6 +371,7 @@ async def main():
             result = await process_company(
                 company_data,
                 include_founder_descriptions=include_founder_descriptions,
+                include_job_details=include_job_details,
                 rate_limit_delay=rate_limit_delay
             )
             

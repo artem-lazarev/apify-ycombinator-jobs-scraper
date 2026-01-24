@@ -51,6 +51,13 @@
       "default": true,
       "editor": "checkbox"
     },
+    "includeJobDetails": {
+      "title": "Include Job Details",
+      "type": "boolean",
+      "description": "Scrape individual job pages for full details (job type, role category, visa, description, apply URL). Set to false for faster scraping with basic job info only.",
+      "default": true,
+      "editor": "checkbox"
+    },
     "rateLimitDelay": {
       "title": "Rate Limit Delay",
       "type": "number",

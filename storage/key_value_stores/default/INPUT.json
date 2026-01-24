@@ -5,6 +5,7 @@
   "filterByLocation": [],
   "topCompaniesOnly": false,
   "includeFounderDescriptions": true,
+  "includeJobDetails": true,
   "rateLimitDelay": 1,
-  "maxCompanies": 3
+  "maxCompanies": 10
 }

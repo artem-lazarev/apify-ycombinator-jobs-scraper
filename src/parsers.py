@@ -439,6 +439,12 @@ def _extract_job_from_card(card: Tag, job_id: str, title: str) -> Optional[Dict]
 def parse_job_page(html: str) -> Dict:
     """
     Parse job page HTML to extract complete job information.
+    
+    YC job pages have this structure:
+    - Job metadata section with labels like "Job type", "Role", "Experience", "Visa"
+    - "About the role" section with full description
+    - "About the interview" section
+    - Apply link
     """
     soup = BeautifulSoup(html, 'lxml')
     result = {
@@ -457,128 +463,272 @@ def parse_job_page(html: str) -> Dict:
         'founders': []  # Backup founder data
     }
     
-    # Extract job title (usually in h1 or main heading)
-    title_elem = soup.find(['h1', 'h2'], class_=lambda x: x and 'title' in str(x).lower() if x else False)
-    if not title_elem:
-        title_elem = soup.find('h1')
+    # Extract job title (usually in h1)
+    title_elem = soup.find('h1')
     if title_elem:
         result['title'] = title_elem.get_text(strip=True)
     
-    # Extract salary range
-    # Look for patterns like "$140K - $250K" or "$140,000 - $250,000"
-    salary_text = soup.get_text()
-    salary_patterns = [
-        r'\$(\d+(?:,\d{3})*(?:K|k)?)\s*[-–—]\s*\$(\d+(?:,\d{3})*(?:K|k)?)',  # $140K - $250K
-        r'salary[:\s]+.*?\$(\d+(?:,\d{3})*(?:K|k)?)\s*[-–—]\s*\$(\d+(?:,\d{3})*(?:K|k)?)',
-    ]
+    # Get full page text for salary/equity extraction
+    page_text = soup.get_text()
     
-    for pattern in salary_patterns:
-        match = re.search(pattern, salary_text, re.IGNORECASE)
+    # Extract salary - handle multiple formats:
+    # 1. Range: "$140K - $250K" or "£80K - £150K"
+    # 2. Monthly: "$6K / monthly" or "$6K/monthly"
+    # 3. Annual single: "$150K" (less common)
+    
+    # Try monthly salary first (e.g., "$6K / monthly")
+    monthly_match = re.search(r'[\$£€](\d+)K?\s*/?\s*monthly', page_text, re.IGNORECASE)
+    if monthly_match:
+        monthly_amount = int(monthly_match.group(1))
+        if monthly_amount < 1000:
+            monthly_amount *= 1000
+        currency = 'USD'
+        match_text = monthly_match.group(0)
+        if '£' in match_text:
+            currency = 'GBP'
+        elif '€' in match_text:
+            currency = 'EUR'
+        result['salary'] = {'min': monthly_amount, 'max': monthly_amount, 'currency': currency, 'period': 'monthly'}
+    else:
+        # Try salary range (e.g., "$140K - $250K")
+        salary_match = re.search(r'[\$£€](\d+)K?\s*[-–—•]\s*[\$£€]?(\d+)K?', page_text)
+        if salary_match:
+            min_sal = int(salary_match.group(1))
+            max_sal = int(salary_match.group(2))
+            # If values are small, they're in K (thousands)
+            if min_sal < 1000:
+                min_sal *= 1000
+            if max_sal < 1000:
+                max_sal *= 1000
+            currency = 'USD'
+            if '£' in page_text[:page_text.find(salary_match.group(0)) + 50]:
+                currency = 'GBP'
+            elif '€' in page_text[:page_text.find(salary_match.group(0)) + 50]:
+                currency = 'EUR'
+            result['salary'] = {'min': min_sal, 'max': max_sal, 'currency': currency}
+    
+    # Extract equity range - patterns like "0.10% - 0.40%"
+    equity_match = re.search(r'(\d+\.?\d*)\s*%\s*[-–—•]\s*(\d+\.?\d*)\s*%', page_text)
+    if equity_match:
+        result['equity'] = {
+            'min': float(equity_match.group(1)),
+            'max': float(equity_match.group(2))
+        }
+    
+    # Extract location from the header line (format: "$140K - $250K•0.10% - 0.40%•Location")
+    # Or look for text after salary/equity before "Job type"
+    location_patterns = [
+        r'[\d.]+%\s*•\s*([^•\n]+?)(?:\s*Job type|\s*$)',  # After equity percentage
+        r'([A-Z][a-zA-Z\s]+,\s*[A-Z]{2}(?:,\s*[A-Z]{2})?\s*/\s*Remote(?:\s*\([^)]+\))?)',  # City, ST / Remote
+        r'(Remote\s*\([^)]+\))',  # Remote (US)
+    ]
+    for pattern in location_patterns:
+        match = re.search(pattern, page_text)
         if match:
-            min_sal = _parse_salary_value(match.group(1))
-            max_sal = _parse_salary_value(match.group(2))
-            if min_sal and max_sal:
-                result['salary'] = {'min': min_sal, 'max': max_sal, 'currency': 'USD'}
+            location = match.group(1).strip()
+            if location and location not in ['Any', 'Apply Now', 'Apply to role']:
+                result['location'] = location
                 break
     
-    # Extract equity range
-    # Look for patterns like "0.10% - 0.40%" or "0.1% - 0.4%"
-    equity_patterns = [
-        r'(\d+\.?\d*)\s*%\s*[-–—]\s*(\d+\.?\d*)\s*%',  # 0.10% - 0.40%
-        r'equity[:\s]+.*?(\d+\.?\d*)\s*%\s*[-–—]\s*(\d+\.?\d*)\s*%',
-    ]
+    # Extract job metadata (Job type, Role, Experience, Visa)
+    # YC pages have a pattern like:
+    # <strong>Job type</strong> followed by <div>Full-time</div>
+    # or the text appears as "Job type\nFull-time"
     
-    for pattern in equity_patterns:
-        match = re.search(pattern, salary_text, re.IGNORECASE)
-        if match:
-            min_eq = float(match.group(1))
-            max_eq = float(match.group(2))
-            result['equity'] = {'min': min_eq, 'max': max_eq}
-            break
+    # Method 1: Look for strong/bold labels followed by values
+    for strong in soup.find_all(['strong', 'b']):
+        label = strong.get_text(strip=True).lower()
+        # Get the next sibling or parent's next sibling for the value
+        value = None
+        
+        # Check next sibling
+        next_elem = strong.find_next_sibling()
+        if next_elem:
+            value = next_elem.get_text(strip=True)
+        
+        # If no sibling, check parent's next sibling
+        if not value and strong.parent:
+            parent_next = strong.parent.find_next_sibling()
+            if parent_next:
+                value = parent_next.get_text(strip=True)
+        
+        # If still no value, look at text right after the strong tag
+        if not value:
+            parent = strong.parent
+            if parent:
+                full_text = parent.get_text(strip=True)
+                label_text = strong.get_text(strip=True)
+                if label_text in full_text:
+                    value = full_text.replace(label_text, '').strip()
+        
+        if value:
+            if label == 'job type' and not result['jobType']:
+                result['jobType'] = value
+            elif label == 'role' and not result['roleCategory']:
+                result['roleCategory'] = value
+            elif label == 'experience' and not result['experience']:
+                result['experience'] = value
+            elif label == 'visa' and not result['visa']:
+                result['visa'] = value
     
-    # Extract location, job type, role category, experience, visa
-    # These are often in a metadata section or list
-    metadata_sections = soup.find_all(['div', 'ul', 'dl'], class_=lambda x: x and any(
-        keyword in str(x).lower() for keyword in ['meta', 'detail', 'info', 'requirement']
-    ) if x else False)
-    
-    for section in metadata_sections:
-        text = section.get_text()
+    # Method 2: Text-based extraction as fallback
+    # Split text into lines and look for patterns
+    lines = [line.strip() for line in page_text.split('\n') if line.strip()]
+    for i, line in enumerate(lines):
+        line_lower = line.lower()
+        next_line = lines[i + 1] if i + 1 < len(lines) else ''
         
-        # Location
-        if 'location' in text.lower() and not result['location']:
-            location_elem = section.find(string=lambda t: t and 'location' in t.lower())
-            if location_elem:
-                parent = location_elem.find_parent()
-                if parent:
-                    result['location'] = parent.get_text().replace('Location:', '').replace('location:', '').strip()
-        
-        # Job type
-        if any(jt in text.lower() for jt in ['full-time', 'part-time', 'contract', 'internship']) and not result['jobType']:
-            for jt in ['Full-time', 'Part-time', 'Contract', 'Internship']:
-                if jt.lower() in text.lower():
-                    result['jobType'] = jt
-                    break
-        
-        # Visa
-        if 'visa' in text.lower() or 'sponsor' in text.lower():
-            if 'will sponsor' in text.lower() or 'sponsors' in text.lower():
-                result['visa'] = 'Will sponsor'
-            elif 'not sponsor' in text.lower() or "won't sponsor" in text.lower():
-                result['visa'] = 'Will not sponsor'
+        if line_lower == 'job type' and not result['jobType'] and next_line:
+            if next_line.lower() in ['full-time', 'part-time', 'contract', 'internship', 'full time', 'part time']:
+                result['jobType'] = next_line
+        elif line_lower == 'role' and not result['roleCategory'] and next_line:
+            # Role can be multi-word like "Engineering, Full stack"
+            if len(next_line) < 100 and not next_line.lower().startswith('about'):
+                result['roleCategory'] = next_line
+        elif line_lower == 'experience' and not result['experience'] and next_line:
+            if len(next_line) < 50:
+                result['experience'] = next_line
+        elif line_lower == 'visa' and not result['visa'] and next_line:
+            if len(next_line) < 100:
+                result['visa'] = next_line
     
     # Extract "About the role" section (job description)
-    about_role = soup.find(string=lambda text: text and 'about the role' in text.lower())
-    if about_role:
-        container = about_role.find_parent(['div', 'section', 'article'])
-        if container:
-            # Get all text after the heading
-            desc_parts = []
-            for sibling in container.find_all_next(['p', 'div', 'ul', 'ol'], limit=10):
-                if sibling.get_text(strip=True):
-                    desc_parts.append(sibling.get_text(strip=True))
-            result['description'] = '\n\n'.join(desc_parts[:5])  # Limit to first few paragraphs
+    # The description is between "About the role" heading and "About the interview" section
+    # Note: There may be an "About {CompanyName}" SUBSECTION within the role description - keep that!
+    # The separate company info section comes AFTER "About the interview" and has a tagline like "We're building..."
+    
+    # Find where "About the role" starts
+    about_role_start = page_text.lower().find('about the role')
+    
+    if about_role_start != -1:
+        # Get text after "About the role"
+        desc_start = about_role_start + len('about the role')
+        remaining_text = page_text[desc_start:]
+        
+        # Find where to stop - look for patterns that indicate end of description:
+        # Primary stop: "About the interview" section
+        # Secondary stops: Company info section markers
+        stop_patterns = [
+            # "About the interview" is the most reliable stop point
+            (r'About\s+the\s+interview', re.IGNORECASE),
+            # Company info section - look for the tagline pattern after company name
+            # This matches "About CompanyName" followed by newline(s) and then "We're building" or similar
+            (r'About\s+[A-Z][a-zA-Z]+\s*\n+\s*We\'re\s+building', re.IGNORECASE),
+            # Founders section
+            (r'\n\s*Founders\s*\n.*?CEO', re.IGNORECASE | re.DOTALL),
+            # Similar Jobs section  
+            (r'\n\s*Similar\s+Jobs\s*\n', re.IGNORECASE),
+            # Company metadata footer (Founded:2012, Batch:W12, etc.)
+            (r'Founded:\s*\d{4}\s*Batch:', re.IGNORECASE),
+        ]
+        
+        end_pos = len(remaining_text)
+        for pattern, flags in stop_patterns:
+            match = re.search(pattern, remaining_text, flags) if flags else re.search(pattern, remaining_text)
+            if match and match.start() < end_pos:
+                end_pos = match.start()
+        
+        desc_text = remaining_text[:end_pos].strip()
+        
+        # Clean up the description
+        if desc_text:
+            # Remove duplicate paragraphs (YC pages often have content repeated)
+            lines = desc_text.split('\n')
+            seen_lines = set()
+            unique_lines = []
+            for line in lines:
+                line = line.strip()
+                if line and len(line) > 10:
+                    # Normalize line for comparison (remove extra spaces)
+                    normalized = ' '.join(line.split())
+                    if normalized not in seen_lines:
+                        seen_lines.add(normalized)
+                        unique_lines.append(line)
+            
+            # Join and clean up
+            desc_text = '\n\n'.join(unique_lines)
+            
+            # Remove any remaining job metadata that might have leaked in
+            desc_text = re.sub(r'^(Job type|Role|Experience|Visa)\s*$', '', desc_text, flags=re.MULTILINE)
+            desc_text = re.sub(r'^(Full-time|Part-time|Contract|Internship)\s*$', '', desc_text, flags=re.MULTILINE)
+            desc_text = re.sub(r'^(Engineering,?\s*(?:Full stack|Backend|Frontend))\s*$', '', desc_text, flags=re.MULTILINE)
+            desc_text = re.sub(r'^Any \(new grads ok\)\s*$', '', desc_text, flags=re.MULTILINE)
+            desc_text = re.sub(r'Apply to.*?Apply to role ›', '', desc_text, flags=re.DOTALL)
+            
+            # Clean up multiple newlines
+            desc_text = re.sub(r'\n{3,}', '\n\n', desc_text).strip()
+            
+            if len(desc_text) > 50:
+                result['description'] = desc_text
     
     # Extract "About the interview" section
-    about_interview = soup.find(string=lambda text: text and 'about the interview' in text.lower())
-    if about_interview:
-        container = about_interview.find_parent(['div', 'section', 'article'])
+    about_interview_heading = soup.find(string=lambda text: text and 'about the interview' in text.lower() if text else False)
+    if about_interview_heading:
+        container = about_interview_heading.find_parent(['div', 'section']) if hasattr(about_interview_heading, 'find_parent') else None
         if container:
-            interview_parts = []
-            for sibling in container.find_all_next(['p', 'div'], limit=5):
-                if sibling.get_text(strip=True):
-                    interview_parts.append(sibling.get_text(strip=True))
-            result['interviewProcess'] = '\n\n'.join(interview_parts[:3])
+            # Find text after the heading
+            interview_text = []
+            found_heading = False
+            for elem in container.find_all(['h2', 'h3', 'p', 'div'], recursive=True):
+                elem_text = elem.get_text(strip=True)
+                if 'about the interview' in elem_text.lower():
+                    found_heading = True
+                    continue
+                if found_heading and elem_text:
+                    # Stop at next section
+                    if elem.name in ['h2'] and 'about' in elem_text.lower():
+                        break
+                    if len(elem_text) > 10 and elem_text not in interview_text:
+                        interview_text.append(elem_text)
+                        # Usually just one paragraph
+                        if len(interview_text) >= 2:
+                            break
+            
+            if interview_text:
+                result['interviewProcess'] = '\n\n'.join(interview_text)
     
-    # Extract skills (often in a list or tags)
-    skills_section = soup.find(string=lambda text: text and 'skill' in text.lower())
-    if skills_section:
-        container = skills_section.find_parent(['div', 'section', 'ul'])
-        if container:
-            skills_list = container.find_all(['li', 'span', 'a'], class_=lambda x: x and 'tag' in str(x).lower() if x else False)
-            for skill_elem in skills_list:
-                skill_text = skill_elem.get_text(strip=True)
-                if skill_text and len(skill_text) < 50:  # Reasonable skill name length
-                    result['skills'].append(skill_text)
+    # Fallback for interview section
+    if not result['interviewProcess']:
+        interview_match = re.search(
+            r'About the interview\s*(.+?)(?:About |Founders|Similar Jobs|$)',
+            page_text,
+            re.DOTALL | re.IGNORECASE
+        )
+        if interview_match:
+            interview_text = interview_match.group(1).strip()
+            # Clean up
+            interview_text = re.sub(r'\s+', ' ', interview_text)
+            # Take first sentence or two
+            sentences = re.split(r'(?<=[.!?])\s+', interview_text)
+            if sentences:
+                result['interviewProcess'] = ' '.join(sentences[:3])
     
     # Extract apply URL
-    apply_link = soup.find('a', href=True, string=lambda text: text and 'apply' in text.lower() if text else False)
-    if not apply_link:
-        apply_link = soup.find('a', href=True, class_=lambda x: x and 'apply' in str(x).lower() if x else False)
-    if apply_link:
-        result['applyUrl'] = apply_link['href']
+    # Look for links containing "apply" in text or href
+    apply_patterns = ['apply to role', 'apply now', 'apply ›', 'apply']
+    for pattern in apply_patterns:
+        apply_link = soup.find('a', href=True, string=lambda text: text and pattern in text.lower() if text else False)
+        if apply_link:
+            result['applyUrl'] = apply_link['href']
+            break
     
-    # Extract founders (backup source)
-    # Similar to company page parsing
-    founders_heading = soup.find(string=lambda text: text and 'founder' in text.lower())
-    if founders_heading:
-        container = founders_heading.find_parent(['div', 'section'])
-        if container:
-            founder_cards = container.find_all(['div', 'article'], recursive=True)
-            for card in founder_cards:
-                founder = _extract_founder_from_card_v2(card)
-                if founder:
-                    result['founders'].append(founder)
+    # Fallback: look for workatastartup.com links
+    if not result['applyUrl']:
+        for link in soup.find_all('a', href=True):
+            href = link.get('href', '')
+            if 'workatastartup.com' in href or 'application' in href:
+                result['applyUrl'] = href
+                break
+    
+    # Extract skills (often in bullet points within the description)
+    # Look for technology keywords mentioned
+    tech_keywords = ['Python', 'JavaScript', 'TypeScript', 'React', 'Node.js', 'Go', 'Rust',
+                     'C++', 'Java', 'Kubernetes', 'Docker', 'AWS', 'GCP', 'Azure', 'SQL',
+                     'PostgreSQL', 'MongoDB', 'Redis', 'GraphQL', 'REST API']
+    for keyword in tech_keywords:
+        if keyword.lower() in page_text.lower():
+            if keyword not in result['skills']:
+                result['skills'].append(keyword)
     
     return result
 
