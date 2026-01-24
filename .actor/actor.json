@@ -1,7 +1,7 @@
 {
   "actorSpecification": 1,
   "name": "yc-jobs-scraper",
-  "title": "YC Jobs Scraper",
+  "title": "Y Combinator Jobs Scraper",
   "description": "Scrapes Y Combinator company pages and job listings, extracting company information, founder details, and complete job postings with salary, equity, and interview process information.",
   "version": "1.0",
   "readme": "../README.md",

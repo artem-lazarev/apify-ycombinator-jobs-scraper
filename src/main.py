@@ -158,7 +158,7 @@ def build_job_from_parsed(job_data: Dict, slug: str, job_id: str) -> Job:
             min=job_data['salary'].get('min'),
             max=job_data['salary'].get('max'),
             currency=job_data['salary'].get('currency', 'USD'),
-            period=job_data['salary'].get('period')
+            period=job_data['salary'].get('period') or 'yearly'
         )
     
     # Build equity
@@ -199,7 +199,7 @@ def build_job_from_company_page(job_data: Dict, slug: str) -> Job:
             min=job_data['salary'].get('min'),
             max=job_data['salary'].get('max'),
             currency=job_data['salary'].get('currency', 'USD'),
-            period=job_data['salary'].get('period')
+            period=job_data['salary'].get('period') or 'yearly'
         )
     
     # Build equity
