@@ -1,138 +1,439 @@
 """HTML parsing functions for YC company and job pages."""
 import re
 from typing import List, Optional, Dict
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, Tag
 from .models import Founder, SocialLinks, Job, Salary, Equity
 
 
 def parse_company_page(html: str) -> Dict:
     """
     Parse company page HTML to extract:
-    - Social links (LinkedIn, Twitter, GitHub, Facebook, Crunchbase)
-    - Founders (name, role, description, LinkedIn, Twitter)
+    - Social links (LinkedIn, Twitter, GitHub, Facebook, Crunchbase) - COMPANY links only
+    - Founders (name, role, description, LinkedIn, Twitter) - from Active Founders section
     - Founded year
+    - Jobs with details (title, location, salary, equity, experience)
     """
     soup = BeautifulSoup(html, 'lxml')
     result = {
         'socialLinks': {},
         'founders': [],
-        'foundedYear': None
+        'foundedYear': None,
+        'jobs': []
     }
     
-    # Extract social links
-    # Look for links in various sections (sidebar, header, footer)
-    social_links_map = {
-        'linkedin': ['linkedin.com'],
-        'twitter': ['twitter.com', 'x.com'],
-        'github': ['github.com'],
-        'facebook': ['facebook.com'],
-        'crunchbase': ['crunchbase.com']
-    }
+    # Extract company social links from the company info section
+    # These are near "Founded:", "Batch:", "Team Size:", "Status:", "Location:"
+    result['socialLinks'] = _extract_company_social_links(soup)
     
-    for link in soup.find_all('a', href=True):
-        href = link.get('href', '').lower()
-        for social_type, domains in social_links_map.items():
-            if any(domain in href for domain in domains):
-                if social_type not in result['socialLinks']:
-                    result['socialLinks'][social_type] = link['href']
-    
-    # Extract founded year from sidebar or metadata
-    # Look for "Founded" text
-    founded_elements = soup.find_all(string=lambda text: text and 'founded' in text.lower())
-    for elem in founded_elements:
-        parent = elem.parent
-        if parent:
-            text = parent.get_text()
-            # Try to extract year (4 digits)
-            years = re.findall(r'\b(19|20)\d{2}\b', text)
-            if years:
-                try:
-                    result['foundedYear'] = int(years[0])
-                    break
-                except (ValueError, IndexError):
-                    pass
+    # Extract founded year
+    result['foundedYear'] = _extract_founded_year(soup)
     
     # Extract founders from "Active Founders" section
-    # Look for founder cards/sections
-    founder_sections = soup.find_all(['div', 'section'], class_=lambda x: x and 'founder' in x.lower() if x else False)
+    result['founders'] = _extract_founders(soup)
     
-    # Also check for common patterns like "Founders" heading followed by cards
-    founders_heading = soup.find(string=lambda text: text and 'founder' in text.lower() and 'active' in text.lower())
-    if founders_heading:
-        # Find the container with founders
-        container = founders_heading.find_parent(['div', 'section', 'article'])
-        if container:
-            founder_cards = container.find_all(['div', 'article'], recursive=True)
-            for card in founder_cards:
-                founder = _extract_founder_from_card(card)
-                if founder:
-                    result['founders'].append(founder)
-    
-    # Alternative: look for founder cards by common class patterns
-    if not result['founders']:
-        # Try finding cards with founder info
-        cards = soup.find_all(['div', 'article'], class_=lambda x: x and any(
-            keyword in str(x).lower() for keyword in ['founder', 'team', 'people']
-        ) if x else False)
-        
-        for card in cards:
-            # Check if this looks like a founder card (has name and possibly role)
-            name_elem = card.find(['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'span'], 
-                                 class_=lambda x: x and 'name' in str(x).lower() if x else False)
-            if not name_elem:
-                # Try finding any heading or strong text that might be a name
-                name_elem = card.find(['h1', 'h2', 'h3', 'h4', 'strong', 'b'])
-            
-            if name_elem:
-                founder = _extract_founder_from_card(card)
-                if founder:
-                    result['founders'].append(founder)
+    # Extract jobs from job listings section
+    result['jobs'] = _extract_jobs_from_company_page(soup)
     
     return result
 
 
-def _extract_founder_from_card(card) -> Optional[Dict]:
-    """Extract founder information from a card element."""
+def _extract_company_social_links(soup: BeautifulSoup) -> Dict[str, str]:
+    """
+    Extract company social links from the company info sidebar.
+    
+    Company social links are in a specific section containing:
+    - Founded: year
+    - Batch: batch name
+    - Team Size: number
+    - Status: Active/Inactive
+    - Location: city, country
+    
+    The social links (website, linkedin, twitter, crunchbase, github) 
+    are grouped together after this metadata in a small container.
+    """
+    social_links = {}
+    
+    # Find the section containing company metadata like "Founded:", "Team Size:", etc.
+    # The company social links are in a SMALL container nearby (level 0-2)
+    # NOT in a larger container that includes founder links
+    
+    for text_marker in ['Founded:', 'Team Size:', 'Batch:']:
+        marker_elem = soup.find(string=lambda text: text and text_marker in text if text else False)
+        if marker_elem:
+            # Find the parent container - stay close (level 0-2 only)
+            parent = marker_elem.find_parent(['div', 'section', 'aside'])
+            if parent:
+                # Go up only 0-2 levels to find the SMALL container with company links
+                for level in range(3):
+                    links = parent.find_all('a', href=True)
+                    
+                    # Check if this is the right container
+                    # It should have linkedin.com/company but NOT linkedin.com/in
+                    has_company_linkedin = any('linkedin.com/company' in (l.get('href', '') or '').lower() for l in links)
+                    has_personal_linkedin = any('linkedin.com/in/' in (l.get('href', '') or '').lower() for l in links)
+                    
+                    if has_company_linkedin and not has_personal_linkedin:
+                        # This is the right container - extract social links
+                        for link in links:
+                            href = link.get('href', '')
+                            href_lower = href.lower()
+                            
+                            if 'linkedin.com/company/' in href_lower and 'linkedin' not in social_links:
+                                social_links['linkedin'] = href
+                            elif ('twitter.com/' in href_lower or 'x.com/' in href_lower) and 'twitter' not in social_links:
+                                # In this small container, the Twitter is company's
+                                social_links['twitter'] = href
+                            elif 'github.com/' in href_lower and 'github' not in social_links:
+                                if 'github.com/ycombinator' not in href_lower:
+                                    social_links['github'] = href
+                            elif 'crunchbase.com/' in href_lower and 'crunchbase' not in social_links:
+                                social_links['crunchbase'] = href
+                            elif 'facebook.com/' in href_lower and 'facebook' not in social_links:
+                                if 'facebook.com/ycombinator' not in href_lower:
+                                    social_links['facebook'] = href
+                        break
+                    
+                    # Go up one level
+                    if parent.parent and parent.parent.name in ['div', 'section', 'aside']:
+                        parent = parent.parent
+                    else:
+                        break
+                
+                if social_links:
+                    break
+    
+    # Fallback: if we didn't find company linkedin, search more specifically
+    if 'linkedin' not in social_links:
+        for link in soup.find_all('a', href=True):
+            href = link.get('href', '')
+            if 'linkedin.com/company/' in href.lower():
+                social_links['linkedin'] = href
+                break
+    
+    # Fallback for twitter: look specifically for twitter.com (not x.com founder links)
+    if 'twitter' not in social_links:
+        for link in soup.find_all('a', href=True):
+            href = link.get('href', '')
+            href_lower = href.lower()
+            # Prefer twitter.com over x.com (x.com links are often founder personal)
+            if 'twitter.com/' in href_lower and 'twitter.com/ycombinator' not in href_lower:
+                social_links['twitter'] = href
+                break
+    
+    return social_links
+
+
+def _extract_founded_year(soup: BeautifulSoup) -> Optional[int]:
+    """Extract the founded year from company metadata."""
+    # Look for "Founded:" followed by a year
+    founded_elem = soup.find(string=lambda text: text and 'Founded:' in text if text else False)
+    if founded_elem:
+        parent = founded_elem.find_parent()
+        if parent:
+            # The year is usually in a sibling or nearby element
+            text = parent.get_text()
+            years = re.findall(r'\b(19\d{2}|20\d{2})\b', text)
+            if years:
+                try:
+                    return int(years[0])
+                except ValueError:
+                    pass
+    
+    # Alternative: look for standalone year near "Founded"
+    for elem in soup.find_all(string=lambda text: text and 'founded' in text.lower() if text else False):
+        parent = elem.find_parent()
+        if parent:
+            # Look in next siblings for year
+            for sibling in parent.find_next_siblings(limit=3):
+                if sibling:
+                    text = sibling.get_text() if hasattr(sibling, 'get_text') else str(sibling)
+                    years = re.findall(r'\b(19\d{2}|20\d{2})\b', text)
+                    if years:
+                        try:
+                            return int(years[0])
+                        except ValueError:
+                            pass
+    
+    return None
+
+
+def _extract_founders(soup: BeautifulSoup) -> List[Dict]:
+    """
+    Extract founders from the "Active Founders" section.
+    
+    Each founder card contains:
+    - Image
+    - Name (usually in a heading or strong element)
+    - Social links (Twitter icon linking to their Twitter, LinkedIn icon)
+    - Role (e.g., "Founder/CEO")
+    - Description paragraph
+    """
+    founders = []
+    seen_names = set()
+    
+    # Find "Active Founders" heading
+    founders_heading = soup.find(string=lambda text: text and 'Active Founders' in text if text else False)
+    
+    if not founders_heading:
+        # Try alternative: just "Founders"
+        founders_heading = soup.find(string=lambda text: text and text.strip() == 'Founders' if text else False)
+    
+    if founders_heading:
+        # Find the container holding all founder cards
+        container = founders_heading.find_parent(['div', 'section'])
+        if container:
+            # Go up a few levels to get the full founders section
+            for _ in range(5):
+                if container.parent and container.parent.name in ['div', 'section']:
+                    container = container.parent
+            
+            # Find all founder cards - they usually have images with founder names as alt text
+            founder_images = container.find_all('img', alt=True)
+            
+            for img in founder_images:
+                alt_text = img.get('alt', '')
+                # Skip non-founder images (logos, icons, etc.)
+                if not alt_text or alt_text in ['Twitter account', 'X (Twitter) logo', 'LinkedIn', 'Y Combinator Logo']:
+                    continue
+                
+                # Skip if it's a company logo (usually small)
+                src = img.get('src', '')
+                if 'small_logos' in src or 'logos/' in src:
+                    continue
+                
+                # The alt text is usually the founder's name
+                founder_name = alt_text.strip()
+                
+                # Skip duplicates (YC pages sometimes show founders twice)
+                if founder_name in seen_names:
+                    continue
+                seen_names.add(founder_name)
+                
+                # Find the card container for this founder - go up multiple levels
+                card = img
+                for _ in range(8):
+                    if card.parent:
+                        card = card.parent
+                        # Check if this contains the founder's social links and role
+                        card_links = card.find_all('a', href=True)
+                        card_text = card.get_text()
+                        has_founder_links = any(
+                            'linkedin.com/in/' in (l.get('href', '') or '').lower() or
+                            'x.com/' in (l.get('href', '') or '').lower() or
+                            'twitter.com/' in (l.get('href', '') or '').lower()
+                            for l in card_links
+                        )
+                        has_role = any(keyword in card_text for keyword in ['CEO', 'CTO', 'Founder', 'COO', 'CFO'])
+                        
+                        if has_founder_links and has_role:
+                            break
+                
+                founder = _extract_founder_from_card_v2(card, founder_name)
+                if founder and founder.get('name'):
+                    founders.append(founder)
+    
+    return founders
+
+
+def _extract_founder_from_card_v2(card: Tag, name_hint: str = None) -> Optional[Dict]:
+    """Extract founder information from a card element (improved version)."""
     founder = {
-        'name': None,
+        'name': name_hint,
         'role': None,
         'description': None,
         'linkedin': None,
         'twitter': None
     }
     
-    # Extract name (usually in heading or strong tag)
-    name_elem = card.find(['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'strong', 'b'])
-    if name_elem:
-        founder['name'] = name_elem.get_text(strip=True)
+    # Get all text content to find role and description
+    all_text = card.get_text(separator='\n', strip=True)
+    lines = [line.strip() for line in all_text.split('\n') if line.strip()]
     
-    # Extract role (often near name, might be in span or p)
-    role_keywords = ['ceo', 'cto', 'founder', 'co-founder', 'cofounder']
-    role_elem = card.find(string=lambda text: text and any(
-        keyword in text.lower() for keyword in role_keywords
-    ))
-    if role_elem:
-        founder['role'] = role_elem.strip()
+    # Find role - usually contains CEO, CTO, Founder, etc.
+    role_keywords = ['CEO', 'CTO', 'COO', 'CFO', 'Founder', 'Co-founder', 'Cofounder', 'Partner']
+    for line in lines:
+        if any(keyword in line for keyword in role_keywords):
+            # This is likely the role
+            if len(line) < 100:  # Role shouldn't be too long
+                founder['role'] = line
+                break
     
-    # Extract description (usually paragraph text)
-    desc_elem = card.find('p')
-    if desc_elem:
-        desc_text = desc_elem.get_text(strip=True)
-        if desc_text and len(desc_text) > 20:  # Likely a description
-            founder['description'] = desc_text
+    # Find description - usually the longest text block
+    for line in lines:
+        if len(line) > 100 and line != founder.get('role'):
+            # Skip if it's just repeated name or role
+            if name_hint and line.startswith(name_hint):
+                continue
+            founder['description'] = line
+            break
     
     # Extract LinkedIn and Twitter links
     for link in card.find_all('a', href=True):
-        href = link.get('href', '').lower()
-        if 'linkedin.com' in href and not founder['linkedin']:
-            founder['linkedin'] = link['href']
-        elif ('twitter.com' in href or 'x.com' in href) and not founder['twitter']:
-            founder['twitter'] = link['href']
+        href = link.get('href', '')
+        href_lower = href.lower()
+        
+        # Personal LinkedIn (/in/) for founders
+        if 'linkedin.com/in/' in href_lower and not founder['linkedin']:
+            founder['linkedin'] = href
+        # Twitter/X
+        elif ('twitter.com/' in href_lower or 'x.com/' in href_lower) and not founder['twitter']:
+            founder['twitter'] = href
     
     # Only return if we have at least a name
     if founder['name']:
         return founder
     return None
+
+
+def _extract_jobs_from_company_page(soup: BeautifulSoup) -> List[Dict]:
+    """
+    Extract job listings from the company page.
+    
+    Jobs section contains:
+    - Job title (link to job page)
+    - Location
+    - Salary range
+    - Equity range
+    - Experience level
+    """
+    jobs = []
+    
+    # Find jobs section - usually has "Jobs at {Company}" heading
+    jobs_heading = soup.find(string=lambda text: text and 'Jobs at' in text if text else False)
+    if not jobs_heading:
+        jobs_heading = soup.find(string=lambda text: text and text.strip() == 'Jobs' if text else False)
+    
+    if jobs_heading:
+        # Find container with job listings
+        container = jobs_heading.find_parent(['div', 'section'])
+        if container:
+            # Go up to get full jobs section
+            for _ in range(3):
+                if container.parent and container.parent.name in ['div', 'section']:
+                    container = container.parent
+            
+            # Find all job links
+            job_links = container.find_all('a', href=lambda h: h and '/jobs/' in h if h else False)
+            
+            seen_job_ids = set()
+            for link in job_links:
+                href = link.get('href', '')
+                # Extract job ID from URL
+                job_match = re.search(r'/jobs/([a-zA-Z0-9_-]+)', href)
+                if job_match:
+                    job_id = job_match.group(1)
+                    if job_id in seen_job_ids:
+                        continue
+                    seen_job_ids.add(job_id)
+                    
+                    # Get job title from link text
+                    title = link.get_text(strip=True)
+                    if title and title not in ['View all jobs', 'Apply Now', 'Apply']:
+                        # Find the job card container
+                        job_card = link.find_parent(['div', 'li', 'article'])
+                        job_data = _extract_job_from_card(job_card, job_id, title)
+                        if job_data:
+                            jobs.append(job_data)
+    
+    return jobs
+
+
+def _extract_job_from_card(card: Tag, job_id: str, title: str) -> Optional[Dict]:
+    """Extract job information from a job card on the company page."""
+    job = {
+        'jobId': job_id,
+        'title': title,
+        'location': None,
+        'salary': None,
+        'equity': None,
+        'experience': None
+    }
+    
+    if not card:
+        return job
+    
+    # The job card might be too small - go up levels to find the full card with all details
+    # Job info format: "Title | Location | $XXK - $XXK | X.XX% - X.XX% | Experience | Apply"
+    card_text = card.get_text(separator=' | ', strip=True)
+    
+    # If card is too small (no salary/location info), go up a few levels
+    if '$' not in card_text and '£' not in card_text and '€' not in card_text:
+        parent = card
+        for _ in range(3):  # Go up max 3 levels
+            if parent.parent:
+                parent = parent.parent
+                parent_text = parent.get_text(separator=' | ', strip=True)
+                # Check if this level has salary info and is still a single job card
+                if ('$' in parent_text or '£' in parent_text or '€' in parent_text):
+                    # Make sure this is a single job card (contains our job title)
+                    if title in parent_text:
+                        # Find where this job's info ends (before next job title or "Apply Now")
+                        # Split by common delimiters
+                        parts = parent_text.split(' | ')
+                        job_parts = []
+                        found_title = False
+                        for part in parts:
+                            if title in part:
+                                found_title = True
+                            if found_title:
+                                job_parts.append(part)
+                                if 'Apply Now' in part or 'Apply ›' in part:
+                                    break
+                        if job_parts:
+                            card_text = ' | '.join(job_parts)
+                            break
+    
+    # Extract location - usually city, state format or "Remote"
+    # Common patterns: "Deerfield, MA, US / Remote (US)", "UK / Remote (US)", etc.
+    location_patterns = [
+        r'([A-Z][a-zA-Z\s]+,\s*[A-Z]{2}(?:,\s*[A-Z]{2})?\s*/\s*Remote(?:\s*\([^)]+\))?)',  # City, ST, US / Remote (US)
+        r'([A-Z][a-zA-Z\s]+,\s*[A-Z]{2}\s*/\s*Remote(?:\s*\([^)]+\))?)',  # City, ST / Remote
+        r'([A-Z]{2,}\s*/\s*Remote\s*\([^)]+\))',  # UK / Remote (US)
+        r'(Remote\s*\([^)]+\))',  # Remote (US)
+        r'([A-Z][a-zA-Z\s]+,\s*[A-Z][a-zA-Z\s]+)',  # City, State/Country
+    ]
+    for pattern in location_patterns:
+        match = re.search(pattern, card_text)
+        if match:
+            location = match.group(1).strip()
+            # Exclude things that look like locations but aren't
+            if location not in ['Any', 'Apply Now']:
+                job['location'] = location
+                break
+    
+    # Extract salary - patterns like "$140K - $250K" or "£80K - £150K GBP"
+    salary_match = re.search(r'[\$£€](\d+)K?\s*[-–]\s*[\$£€]?(\d+)K?(?:\s*(USD|GBP|EUR))?', card_text, re.IGNORECASE)
+    if salary_match:
+        min_sal = int(salary_match.group(1))
+        max_sal = int(salary_match.group(2))
+        # If values are small, they're in K (thousands)
+        if min_sal < 1000:
+            min_sal *= 1000
+        if max_sal < 1000:
+            max_sal *= 1000
+        currency = salary_match.group(3) or 'USD'
+        if '£' in card_text:
+            currency = 'GBP'
+        elif '€' in card_text:
+            currency = 'EUR'
+        job['salary'] = {'min': min_sal, 'max': max_sal, 'currency': currency}
+    
+    # Extract equity - patterns like "0.10% - 0.40%"
+    equity_match = re.search(r'(\d+\.?\d*)\s*%\s*[-–]\s*(\d+\.?\d*)\s*%', card_text)
+    if equity_match:
+        job['equity'] = {
+            'min': float(equity_match.group(1)),
+            'max': float(equity_match.group(2))
+        }
+    
+    # Extract experience level
+    exp_patterns = ['Any (new grads ok)', 'New grad', 'Entry level', 'Mid-level', 'Senior', 'Staff', 'Principal']
+    for exp in exp_patterns:
+        if exp.lower() in card_text.lower():
+            job['experience'] = exp
+            break
+    
+    return job
 
 
 def parse_job_page(html: str) -> Dict:
@@ -275,7 +576,7 @@ def parse_job_page(html: str) -> Dict:
         if container:
             founder_cards = container.find_all(['div', 'article'], recursive=True)
             for card in founder_cards:
-                founder = _extract_founder_from_card(card)
+                founder = _extract_founder_from_card_v2(card)
                 if founder:
                     result['founders'].append(founder)
     

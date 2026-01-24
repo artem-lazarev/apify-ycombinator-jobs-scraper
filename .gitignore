@@ -15,4 +15,4 @@ venv/
 .DS_Store
 
 # Apify
-.storage/
+storage/datasets/

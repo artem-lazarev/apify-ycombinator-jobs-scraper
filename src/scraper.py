@@ -1,15 +1,24 @@
-"""crawl4ai scraping logic for YC pages."""
+"""HTTP scraping logic for YC pages using aiohttp."""
 import asyncio
 import logging
 from typing import Optional
-from crawl4ai import AsyncWebCrawler, BrowserConfig, CrawlerRunConfig
+import aiohttp
 
 logger = logging.getLogger(__name__)
+
+# Headers to mimic a real browser
+HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+    "Accept-Language": "en-US,en;q=0.5",
+    "Accept-Encoding": "gzip, deflate, br",
+    "Connection": "keep-alive",
+}
 
 
 async def scrape_page(url: str, retries: int = 3, delay: float = 1.0) -> Optional[str]:
     """
-    Scrape a single page using crawl4ai.
+    Scrape a single page using aiohttp.
     
     Args:
         url: URL to scrape
@@ -19,31 +28,29 @@ async def scrape_page(url: str, retries: int = 3, delay: float = 1.0) -> Optiona
     Returns:
         HTML content or None if scraping failed
     """
-    browser_config = BrowserConfig(
-        headless=True,
-        user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-    )
-    
-    crawler_config = CrawlerRunConfig(
-        wait_until="networkidle",
-        timeout=30000,
-        page_timeout=30000
-    )
-    
     for attempt in range(retries):
         try:
-            async with AsyncWebCrawler(config=browser_config) as crawler:
-                result = await crawler.arun(url, config=crawler_config)
-                if result.success and result.html:
-                    return result.html
-                else:
-                    logger.warning(f"Scraping {url} returned no HTML (attempt {attempt + 1}/{retries})")
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url, headers=HEADERS, timeout=aiohttp.ClientTimeout(total=30)) as response:
+                    if response.status == 200:
+                        html = await response.text()
+                        if html:
+                            return html
+                        else:
+                            logger.warning(f"Scraping {url} returned empty HTML (attempt {attempt + 1}/{retries})")
+                    else:
+                        logger.warning(f"Scraping {url} returned status {response.status} (attempt {attempt + 1}/{retries})")
+        except asyncio.TimeoutError:
+            logger.error(f"Timeout scraping {url} (attempt {attempt + 1}/{retries})")
+        except aiohttp.ClientError as e:
+            logger.error(f"Client error scraping {url} (attempt {attempt + 1}/{retries}): {str(e)}")
         except Exception as e:
             logger.error(f"Error scraping {url} (attempt {attempt + 1}/{retries}): {str(e)}")
-            if attempt < retries - 1:
-                await asyncio.sleep(delay * (2 ** attempt))  # Exponential backoff
-            else:
-                logger.error(f"Failed to scrape {url} after {retries} attempts")
+        
+        if attempt < retries - 1:
+            await asyncio.sleep(delay * (2 ** attempt))  # Exponential backoff
+        else:
+            logger.error(f"Failed to scrape {url} after {retries} attempts")
     
     return None
 

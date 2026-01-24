@@ -1,15 +1,14 @@
 """Main actor logic for YC Jobs Scraper."""
 import asyncio
 import logging
-import re
 from typing import List, Dict, Optional, Any
 from datetime import datetime
 import aiohttp
 from apify import Actor
 
 from .models import Company, CompanyOutput, Founder, Job, SocialLinks, Salary, Equity
-from .scraper import scrape_company_page, scrape_job_page
-from .parsers import parse_company_page, parse_job_page, merge_founders
+from .scraper import scrape_company_page
+from .parsers import parse_company_page
 
 logger = logging.getLogger(__name__)
 
@@ -73,22 +72,6 @@ def filter_companies(
     
     logger.info(f"Filtered to {len(filtered)} companies")
     return filtered
-
-
-def extract_job_ids_from_company_page(html: str) -> List[str]:
-    """Extract job IDs from company page HTML."""
-    # Look for job links like /companies/slug/jobs/job-id
-    import re
-    pattern = r'/companies/[^/]+/jobs/([a-zA-Z0-9_-]+)'
-    job_ids = re.findall(pattern, html)
-    # Remove duplicates while preserving order
-    seen = set()
-    unique_job_ids = []
-    for job_id in job_ids:
-        if job_id not in seen:
-            seen.add(job_id)
-            unique_job_ids.append(job_id)
-    return unique_job_ids
 
 
 def build_company_from_hiring_json(company_data: Dict[str, Any], scraped_data: Dict) -> Company:
@@ -202,13 +185,57 @@ def build_job_from_parsed(job_data: Dict, slug: str, job_id: str) -> Job:
     )
 
 
+def build_job_from_company_page(job_data: Dict, slug: str) -> Job:
+    """Build Job model from job data parsed from company page."""
+    job_id = job_data.get('jobId', '')
+    
+    # Build salary
+    salary = None
+    if job_data.get('salary'):
+        salary = Salary(
+            min=job_data['salary'].get('min'),
+            max=job_data['salary'].get('max'),
+            currency=job_data['salary'].get('currency', 'USD')
+        )
+    
+    # Build equity
+    equity = None
+    if job_data.get('equity'):
+        equity = Equity(
+            min=job_data['equity'].get('min'),
+            max=job_data['equity'].get('max')
+        )
+    
+    # Build job URL
+    job_url = f"https://www.ycombinator.com/companies/{slug}/jobs/{job_id}"
+    
+    return Job(
+        jobId=job_id,
+        title=job_data.get('title', ''),
+        jobUrl=job_url,
+        location=job_data.get('location'),
+        salary=salary,
+        equity=equity,
+        jobType=None,  # Not available on company page
+        roleCategory=None,  # Not available on company page
+        experience=job_data.get('experience'),
+        visa=None,  # Not available on company page
+        skills=[],  # Not available on company page
+        description=None,  # Not available on company page
+        interviewProcess=None,  # Not available on company page
+        applyUrl=None  # Could be constructed but not needed
+    )
+
+
 async def process_company(
     company_data: Dict[str, Any],
     include_founder_descriptions: bool = True,
     rate_limit_delay: float = 1.5
 ) -> Optional[CompanyOutput]:
     """
-    Process a single company: scrape company page and job pages, extract data.
+    Process a single company: scrape company page and extract all data.
+    
+    Jobs are now parsed directly from the company page (faster, fewer requests).
     
     Args:
         company_data: Company data from hiring.json
@@ -227,88 +254,43 @@ async def process_company(
     
     try:
         # Scrape company page
-        company_html = None
-        company_parsed = {'socialLinks': {}, 'founders': [], 'foundedYear': None}
+        company_html = await scrape_company_page(slug)
+        await asyncio.sleep(rate_limit_delay)  # Rate limiting
         
-        if include_founder_descriptions or True:  # Always scrape for social links and founded year
-            company_html = await scrape_company_page(slug)
-            await asyncio.sleep(rate_limit_delay)  # Rate limiting
-            
-            if company_html:
-                company_parsed = parse_company_page(company_html)
-            else:
-                logger.warning(f"Failed to scrape company page for {slug}")
+        if not company_html:
+            logger.warning(f"Failed to scrape company page for {slug}")
+            return None
         
-        # Extract job IDs from company page
-        job_ids = []
-        if company_html:
-            job_ids = extract_job_ids_from_parsed_page(company_html)
-        
-        # Scrape each job page
-        jobs = []
-        job_founders = []
-        
-        for job_id in job_ids:
-            job_html = await scrape_job_page(slug, job_id)
-            await asyncio.sleep(rate_limit_delay)  # Rate limiting
-            
-            if job_html:
-                job_parsed = parse_job_page(job_html)
-                
-                # Build job model
-                job = build_job_from_parsed(job_parsed, slug, job_id)
-                if job.title:  # Only add if we have a title
-                    jobs.append(job)
-                
-                # Collect founder data from job page (backup)
-                if job_parsed.get('founders'):
-                    job_founders.extend(job_parsed['founders'])
-            else:
-                logger.warning(f"Failed to scrape job page for {slug}/jobs/{job_id}")
+        # Parse company page - this now extracts social links, founders, AND jobs
+        company_parsed = parse_company_page(company_html)
         
         # Build company model
         company = build_company_from_hiring_json(company_data, company_parsed)
         
-        # Merge founders
-        company_founders = build_founders_from_parsed(company_parsed.get('founders', []))
-        job_founders_models = build_founders_from_parsed(job_founders)
-        merged_founders = merge_founders(company_founders, job_founders_models)
+        # Build founders from parsed data
+        founders = build_founders_from_parsed(company_parsed.get('founders', []))
+        
+        # Build jobs from parsed data (jobs are now extracted from company page)
+        jobs = []
+        for job_data in company_parsed.get('jobs', []):
+            job = build_job_from_company_page(job_data, slug)
+            if job and job.title:
+                jobs.append(job)
         
         # Build output
         output = CompanyOutput(
             company=company,
-            founders=merged_founders,
+            founders=founders,
             jobs=jobs,
             scrapedAt=datetime.utcnow()
         )
         
-        logger.info(f"Processed {company.name}: {len(jobs)} jobs, {len(merged_founders)} founders")
+        logger.info(f"Processed {company.name}: {len(jobs)} jobs, {len(founders)} founders")
         return output
         
     except Exception as e:
         logger.error(f"Error processing company {slug}: {str(e)}", exc_info=True)
         return None
-
-
-def extract_job_ids_from_parsed_page(html: str) -> List[str]:
-    """Extract job IDs from parsed HTML."""
-    # This is a helper that tries multiple methods to find job IDs
-    job_ids = extract_job_ids_from_company_page(html)
-    
-    # Alternative: look for job listing elements
-    from bs4 import BeautifulSoup
-    soup = BeautifulSoup(html, 'lxml')
-    
-    # Find all links that might be job links
-    for link in soup.find_all('a', href=True):
-        href = link.get('href', '')
-        match = re.search(r'/jobs/([a-zA-Z0-9_-]+)', href)
-        if match:
-            job_id = match.group(1)
-            if job_id not in job_ids:
-                job_ids.append(job_id)
-    
-    return job_ids
 
 
 async def main():

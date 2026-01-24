@@ -1,0 +1,10 @@
+{
+  "filterByBatch": [],
+  "filterByIndustry": [],
+  "filterByStage": [],
+  "filterByLocation": [],
+  "topCompaniesOnly": false,
+  "includeFounderDescriptions": true,
+  "rateLimitDelay": 1,
+  "maxCompanies": 3
+}

@@ -6,8 +6,7 @@
     "maxCompanies": {
       "title": "Maximum Companies",
       "type": "integer",
-      "description": "Maximum number of companies to scrape (default: all)",
-      "default": null,
+      "description": "Maximum number of companies to scrape (leave empty for all)",
       "editor": "number"
     },
     "filterByBatch": {
