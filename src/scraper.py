@@ -1,0 +1,81 @@
+"""crawl4ai scraping logic for YC pages."""
+import asyncio
+import logging
+from typing import Optional
+from crawl4ai import AsyncWebCrawler, BrowserConfig, CrawlerRunConfig
+
+logger = logging.getLogger(__name__)
+
+
+async def scrape_page(url: str, retries: int = 3, delay: float = 1.0) -> Optional[str]:
+    """
+    Scrape a single page using crawl4ai.
+    
+    Args:
+        url: URL to scrape
+        retries: Number of retry attempts
+        delay: Delay between retries in seconds
+    
+    Returns:
+        HTML content or None if scraping failed
+    """
+    browser_config = BrowserConfig(
+        headless=True,
+        user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    )
+    
+    crawler_config = CrawlerRunConfig(
+        wait_until="networkidle",
+        timeout=30000,
+        page_timeout=30000
+    )
+    
+    for attempt in range(retries):
+        try:
+            async with AsyncWebCrawler(config=browser_config) as crawler:
+                result = await crawler.arun(url, config=crawler_config)
+                if result.success and result.html:
+                    return result.html
+                else:
+                    logger.warning(f"Scraping {url} returned no HTML (attempt {attempt + 1}/{retries})")
+        except Exception as e:
+            logger.error(f"Error scraping {url} (attempt {attempt + 1}/{retries}): {str(e)}")
+            if attempt < retries - 1:
+                await asyncio.sleep(delay * (2 ** attempt))  # Exponential backoff
+            else:
+                logger.error(f"Failed to scrape {url} after {retries} attempts")
+    
+    return None
+
+
+async def scrape_company_page(slug: str, retries: int = 3) -> Optional[str]:
+    """
+    Scrape a company page.
+    
+    Args:
+        slug: Company slug (e.g., 'airbnb')
+        retries: Number of retry attempts
+    
+    Returns:
+        HTML content or None if scraping failed
+    """
+    url = f"https://www.ycombinator.com/companies/{slug}"
+    logger.info(f"Scraping company page: {url}")
+    return await scrape_page(url, retries=retries)
+
+
+async def scrape_job_page(slug: str, job_id: str, retries: int = 3) -> Optional[str]:
+    """
+    Scrape a job page.
+    
+    Args:
+        slug: Company slug
+        job_id: Job ID (e.g., 'yaLKuLq')
+        retries: Number of retry attempts
+    
+    Returns:
+        HTML content or None if scraping failed
+    """
+    url = f"https://www.ycombinator.com/companies/{slug}/jobs/{job_id}"
+    logger.info(f"Scraping job page: {url}")
+    return await scrape_page(url, retries=retries)

@@ -1,0 +1,63 @@
+{
+  "title": "YC Jobs Scraper Input",
+  "type": "object",
+  "schemaVersion": 1,
+  "properties": {
+    "maxCompanies": {
+      "title": "Maximum Companies",
+      "type": "integer",
+      "description": "Maximum number of companies to scrape (default: all)",
+      "default": null,
+      "editor": "number"
+    },
+    "filterByBatch": {
+      "title": "Filter by Batch",
+      "type": "array",
+      "description": "Filter by YC batch (e.g., ['W24', 'S24'])",
+      "default": [],
+      "editor": "stringList"
+    },
+    "filterByIndustry": {
+      "title": "Filter by Industry",
+      "type": "array",
+      "description": "Filter by industry (e.g., ['B2B', 'Fintech'])",
+      "default": [],
+      "editor": "stringList"
+    },
+    "filterByStage": {
+      "title": "Filter by Stage",
+      "type": "array",
+      "description": "Filter by stage (e.g., ['Seed', 'Series A'])",
+      "default": [],
+      "editor": "stringList"
+    },
+    "filterByLocation": {
+      "title": "Filter by Location",
+      "type": "array",
+      "description": "Filter by location keywords (e.g., ['Remote', 'San Francisco'])",
+      "default": [],
+      "editor": "stringList"
+    },
+    "topCompaniesOnly": {
+      "title": "Top Companies Only",
+      "type": "boolean",
+      "description": "Only scrape top YC companies",
+      "default": false,
+      "editor": "checkbox"
+    },
+    "includeFounderDescriptions": {
+      "title": "Include Founder Descriptions",
+      "type": "boolean",
+      "description": "Include founder bio descriptions (requires company page scrape)",
+      "default": true,
+      "editor": "checkbox"
+    },
+    "rateLimitDelay": {
+      "title": "Rate Limit Delay",
+      "type": "number",
+      "description": "Delay between requests in seconds (default: 1.5)",
+      "default": 1.5,
+      "editor": "number"
+    }
+  }
+}
