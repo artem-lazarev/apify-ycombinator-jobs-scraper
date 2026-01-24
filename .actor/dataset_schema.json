@@ -1,0 +1,74 @@
+{
+    "actorSpecification": 1,
+    "fields": {},
+    "views": {
+        "overview": {
+            "title": "Companies & Jobs",
+            "transformation": {
+                "fields": [
+                    "company.logoUrl",
+                    "company.name",
+                    "company.ycBatch",
+                    "company.website",
+                    "company.industry",
+                    "company.teamSize",
+                    "company.stage",
+                    "company.tagline",
+                    "jobs",
+                    "founders",
+                    "scrapedAt"
+                ],
+                "flatten": ["company"]
+            },
+            "display": {
+                "component": "table",
+                "properties": {
+                    "company.logoUrl": {
+                        "label": "Logo",
+                        "format": "image"
+                    },
+                    "company.name": {
+                        "label": "Company",
+                        "format": "text"
+                    },
+                    "company.ycBatch": {
+                        "label": "YC Batch",
+                        "format": "text"
+                    },
+                    "company.website": {
+                        "label": "Website",
+                        "format": "link"
+                    },
+                    "company.industry": {
+                        "label": "Industry",
+                        "format": "text"
+                    },
+                    "company.teamSize": {
+                        "label": "Team Size",
+                        "format": "number"
+                    },
+                    "company.stage": {
+                        "label": "Stage",
+                        "format": "text"
+                    },
+                    "company.tagline": {
+                        "label": "Tagline",
+                        "format": "text"
+                    },
+                    "jobs": {
+                        "label": "Jobs",
+                        "format": "array"
+                    },
+                    "founders": {
+                        "label": "Founders",
+                        "format": "array"
+                    },
+                    "scrapedAt": {
+                        "label": "Scraped At",
+                        "format": "date"
+                    }
+                }
+            }
+        }
+    }
+}
