@@ -7,5 +7,5 @@
   "includeFounderDescriptions": true,
   "includeJobDetails": true,
   "rateLimitDelay": 1,
-  "maxCompanies": 10
+  "maxCompanies": 1500
 }

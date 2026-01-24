@@ -27,7 +27,7 @@ class Salary(BaseModel):
     min: Optional[int] = None
     max: Optional[int] = None
     currency: str = "USD"
-    period: Optional[str] = None  # "monthly", "yearly", etc. None defaults to yearly
+    period: str = "yearly"  # "monthly", "yearly", etc.
 
 
 class Equity(BaseModel):

@@ -21,10 +21,10 @@ async def fetch_hiring_json() -> List[Dict[str, Any]]:
         async with session.get(HIRING_JSON_URL) as response:
             if response.status == 200:
                 data = await response.json()
-                logger.info(f"Fetched {len(data)} companies from hiring.json")
+                logger.info(f"📥 Fetched {len(data)} companies from hiring.json")
                 return data
             else:
-                logger.error(f"Failed to fetch hiring.json: {response.status}")
+                logger.error(f"❌ Failed to fetch hiring.json: {response.status}")
                 raise Exception(f"Failed to fetch hiring.json: {response.status}")
 
 
@@ -42,7 +42,7 @@ def filter_companies(
     
     # Filter to only companies that are actively hiring
     filtered = [c for c in filtered if c.get('isHiring', False) is True]
-    logger.info(f"Filtered to {len(filtered)} companies with isHiring=True")
+    logger.info(f"🔍 Filtered to {len(filtered)} companies with isHiring=True")
     
     # Filter by batch
     if filter_by_batch:
@@ -74,7 +74,7 @@ def filter_companies(
     if max_companies:
         filtered = filtered[:max_companies]
     
-    logger.info(f"Filtered to {len(filtered)} companies")
+    logger.info(f"🔍 Filtered to {len(filtered)} companies")
     return filtered
 
 
@@ -249,10 +249,10 @@ async def process_company(
     """
     slug = company_data.get('slug')
     if not slug:
-        logger.warning(f"Company {company_data.get('name')} has no slug, skipping")
+        logger.warning(f"⚠️ Company {company_data.get('name')} has no slug, skipping")
         return None
     
-    logger.info(f"Processing company: {company_data.get('name')} ({slug})")
+    logger.info(f"🏢 Processing company: {company_data.get('name')} ({slug})")
     
     try:
         # Scrape company page
@@ -260,7 +260,7 @@ async def process_company(
         await asyncio.sleep(rate_limit_delay)  # Rate limiting
         
         if not company_html:
-            logger.warning(f"Failed to scrape company page for {slug}")
+            logger.warning(f"⚠️ Failed to scrape company page for {slug}")
             return None
         
         # Parse company page - this extracts social links, founders, AND basic job info
@@ -281,7 +281,7 @@ async def process_company(
             
             if include_job_details and job_id:
                 # Scrape individual job page for complete details
-                logger.info(f"Scraping job page: {slug}/jobs/{job_id}")
+                logger.info(f"📄 Scraping job page: {slug}/jobs/{job_id}")
                 job_html = await scrape_job_page(slug, job_id)
                 await asyncio.sleep(rate_limit_delay)  # Rate limiting
                 
@@ -294,7 +294,7 @@ async def process_company(
                         job_founders_data = job_page_data.get('founders', [])
                         if job_founders_data:
                             job_page_founders = job_founders_data
-                            logger.info(f"Found {len(job_page_founders)} founders on job page for {slug}")
+                            logger.info(f"👥 Found {len(job_page_founders)} founders on job page for {slug}")
                     
                     # Merge job data: prefer job page data, fall back to company page data
                     merged_job_data = {
@@ -325,7 +325,7 @@ async def process_company(
         # If no founders from company page, use founders from job page
         if not founders and job_page_founders:
             founders = build_founders_from_parsed(job_page_founders)
-            logger.info(f"Using {len(founders)} founders from job page for {slug}")
+            logger.info(f"👥 Using {len(founders)} founders from job page for {slug}")
         
         # Build output
         output = CompanyOutput(
@@ -335,11 +335,11 @@ async def process_company(
             scrapedAt=datetime.utcnow()
         )
         
-        logger.info(f"Processed {company.name}: {len(jobs)} jobs, {len(founders)} founders")
+        logger.info(f"✅ Processed {company.name}: {len(jobs)} jobs, {len(founders)} founders")
         return output
         
     except Exception as e:
-        logger.error(f"Error processing company {slug}: {str(e)}", exc_info=True)
+        logger.error(f"❌ Error processing company {slug}: {str(e)}", exc_info=True)
         return None
 
 
@@ -359,8 +359,8 @@ async def main():
         include_job_details = input_data.get('includeJobDetails', True)
         rate_limit_delay = input_data.get('rateLimitDelay', 1.5)
         
-        logger.info("Starting YC Jobs Scraper")
-        logger.info(f"Input: maxCompanies={max_companies}, includeJobDetails={include_job_details}, filters={input_data}")
+        logger.info("🚀 Starting YC Jobs Scraper")
+        logger.info(f"⚙️ Input: maxCompanies={max_companies}, includeJobDetails={include_job_details}, filters={input_data}")
         
         # Fetch hiring.json
         companies_data = await fetch_hiring_json()
@@ -379,7 +379,7 @@ async def main():
         # Process companies
         results = []
         for i, company_data in enumerate(filtered_companies, 1):
-            logger.info(f"Processing company {i}/{len(filtered_companies)}")
+            logger.info(f"🔄 Processing company {i}/{len(filtered_companies)}")
             result = await process_company(
                 company_data,
                 include_founder_descriptions=include_founder_descriptions,
@@ -392,7 +392,7 @@ async def main():
                 await actor.push_data(result.model_dump(mode='json'))
                 results.append(result)
         
-        logger.info(f"Completed scraping. Processed {len(results)} companies")
+        logger.info(f"🎉 Completed scraping. Processed {len(results)} companies")
         
         # Set output summary
         await actor.set_value('OUTPUT', {

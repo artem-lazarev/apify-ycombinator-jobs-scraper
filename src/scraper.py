@@ -37,20 +37,20 @@ async def scrape_page(url: str, retries: int = 3, delay: float = 1.0) -> Optiona
                         if html:
                             return html
                         else:
-                            logger.warning(f"Scraping {url} returned empty HTML (attempt {attempt + 1}/{retries})")
+                            logger.warning(f"⚠️ Scraping {url} returned empty HTML (attempt {attempt + 1}/{retries})")
                     else:
-                        logger.warning(f"Scraping {url} returned status {response.status} (attempt {attempt + 1}/{retries})")
+                        logger.warning(f"⚠️ Scraping {url} returned status {response.status} (attempt {attempt + 1}/{retries})")
         except asyncio.TimeoutError:
-            logger.error(f"Timeout scraping {url} (attempt {attempt + 1}/{retries})")
+            logger.error(f"⏱️ Timeout scraping {url} (attempt {attempt + 1}/{retries})")
         except aiohttp.ClientError as e:
-            logger.error(f"Client error scraping {url} (attempt {attempt + 1}/{retries}): {str(e)}")
+            logger.error(f"❌ Client error scraping {url} (attempt {attempt + 1}/{retries}): {str(e)}")
         except Exception as e:
-            logger.error(f"Error scraping {url} (attempt {attempt + 1}/{retries}): {str(e)}")
+            logger.error(f"❌ Error scraping {url} (attempt {attempt + 1}/{retries}): {str(e)}")
         
         if attempt < retries - 1:
             await asyncio.sleep(delay * (2 ** attempt))  # Exponential backoff
         else:
-            logger.error(f"Failed to scrape {url} after {retries} attempts")
+            logger.error(f"❌ Failed to scrape {url} after {retries} attempts")
     
     return None
 
@@ -67,7 +67,7 @@ async def scrape_company_page(slug: str, retries: int = 3) -> Optional[str]:
         HTML content or None if scraping failed
     """
     url = f"https://www.ycombinator.com/companies/{slug}"
-    logger.info(f"Scraping company page: {url}")
+    logger.info(f"🏢 Scraping company page: {url}")
     return await scrape_page(url, retries=retries)
 
 
@@ -84,5 +84,5 @@ async def scrape_job_page(slug: str, job_id: str, retries: int = 3) -> Optional[
         HTML content or None if scraping failed
     """
     url = f"https://www.ycombinator.com/companies/{slug}/jobs/{job_id}"
-    logger.info(f"Scraping job page: {url}")
+    logger.info(f"📄 Scraping job page: {url}")
     return await scrape_page(url, retries=retries)
