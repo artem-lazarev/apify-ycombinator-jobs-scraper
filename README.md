@@ -1,44 +1,120 @@
-# YC Jobs Scraper Apify Actor
+# Y Combinator Jobs Scraper
 
-An Apify actor that scrapes Y Combinator company pages and job listings, extracting comprehensive company information, founder details, and complete job postings with salary, equity, and interview process information.
+Scrape Y Combinator company pages and job listings. Extract company info, founder details, salaries, equity ranges, skills, and interview processes from YC-backed startups.
 
-## Overview
+## What does Y Combinator Jobs Scraper do?
 
-This actor fetches company data from the YC hiring.json API and scrapes individual company and job pages to extract:
+Y Combinator Jobs Scraper extracts **complete job listing data** from YC companies that are actively hiring. Unlike other YC scrapers that only provide basic company info, this actor dives deep into each job posting to extract:
 
-- **Company Information**: Name, description, logo, website, locations, industry, batch, stage, social links, and more
-- **Founder Details**: Names, roles, descriptions, LinkedIn, and Twitter profiles
-- **Job Listings**: Complete job details including salary ranges, equity, location, job type, skills, descriptions, interview process, and apply URLs
+- **Salary ranges** (min/max with currency)
+- **Equity percentages** (min/max)
+- **Required skills** and experience levels
+- **Interview process details**
+- **Direct apply URLs**
+- **Full founder profiles** with LinkedIn and Twitter
 
-## Architecture
+Perfect for recruiters, job boards, market researchers, and anyone tracking the YC startup job market.
 
-The actor follows this workflow:
+## Why scrape Y Combinator jobs?
 
-1. Fetches company list from `https://yc-oss.github.io/api/companies/hiring.json`
-2. Filters companies based on input criteria
-3. For each company:
-   - Scrapes the company page to extract social links, founders, and founded year
-   - Extracts job listing URLs from the company page
-   - Scrapes each job page to extract complete job details
-   - Merges founder data from company and job pages (using the most complete information)
-4. Outputs structured data to Apify dataset
+- **Recruiting & Talent Sourcing:** Find candidates or job opportunities at top YC startups
+- **Salary Benchmarking:** Analyze compensation trends across YC companies by role, location, and stage
+- **Market Research:** Track hiring patterns, in-demand skills, and growth signals in the startup ecosystem
+- **Lead Generation:** Identify fast-growing companies and their decision-makers (founders)
+- **Investment Research:** Monitor hiring activity as a signal of company health and growth
+
+## Output Data Fields
+
+### Company Data
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `name` | String | Company name |
+| `slug` | String | URL-friendly identifier |
+| `tagline` | String | One-line company description |
+| `longDescription` | String | Full company description |
+| `website` | String (URL) | Company website |
+| `logoUrl` | String (URL) | Company logo image |
+| `ycUrl` | String (URL) | YC profile URL |
+| `ycBatch` | String | YC batch (e.g., W24, S23) |
+| `foundedYear` | Integer | Year founded |
+| `teamSize` | Integer | Number of employees |
+| `status` | String | Company status (Active, Public, Acquired) |
+| `stage` | String | Funding stage (Seed, Series A, Growth) |
+| `industry` | String | Primary industry |
+| `industries` | List | All industry tags |
+| `tags` | List | Additional tags |
+| `topCompany` | Boolean | YC top company flag |
+| `allLocations` | String | Company locations |
+| `regions` | List | Geographic regions |
+| `socialLinks.linkedin` | String (URL) | Company LinkedIn |
+| `socialLinks.twitter` | String (URL) | Company Twitter/X |
+| `socialLinks.facebook` | String (URL) | Company Facebook |
+| `socialLinks.github` | String (URL) | Company GitHub |
+| `socialLinks.crunchbase` | String (URL) | Crunchbase profile |
+
+### Founder Data
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `name` | String | Founder name |
+| `role` | String | Title/role at company |
+| `description` | String | Founder bio |
+| `linkedin` | String (URL) | LinkedIn profile |
+| `twitter` | String (URL) | Twitter/X profile |
+
+### Job Data
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `jobId` | String | Unique job identifier |
+| `title` | String | Job title |
+| `jobUrl` | String (URL) | Job posting URL |
+| `location` | String | Job location |
+| `salary.min` | Integer | Minimum salary |
+| `salary.max` | Integer | Maximum salary |
+| `salary.currency` | String | Salary currency (USD) |
+| `equity.min` | Float | Minimum equity % |
+| `equity.max` | Float | Maximum equity % |
+| `jobType` | String | Full-time, Part-time, Contract |
+| `roleCategory` | String | Engineering, Sales, etc. |
+| `experience` | String | Required experience level |
+| `visa` | String | Visa sponsorship status |
+| `skills` | List | Required skills |
+| `description` | String | Full job description |
+| `interviewProcess` | String | Interview process details |
+| `applyUrl` | String (URL) | Direct application URL |
 
 ## Input Parameters
 
 | Parameter | Type | Description | Default |
 |-----------|------|-------------|---------|
-| `maxCompanies` | integer | Maximum number of companies to scrape | null (all) |
-| `filterByBatch` | array | Filter by YC batch (e.g., ['W24', 'S24']) | [] |
-| `filterByIndustry` | array | Filter by industry (e.g., ['B2B', 'Fintech']) | [] |
-| `filterByStage` | array | Filter by stage (e.g., ['Seed', 'Series A']) | [] |
-| `filterByLocation` | array | Filter by location keywords (e.g., ['Remote', 'San Francisco']) | [] |
-| `topCompaniesOnly` | boolean | Only scrape top YC companies | false |
-| `includeFounderDescriptions` | boolean | Include founder bio descriptions | true |
-| `rateLimitDelay` | number | Delay between requests in seconds | 1.5 |
+| `maxCompanies` | Integer | Maximum number of companies to scrape | All |
+| `filterByBatch` | List | Filter by YC batch (e.g., `["W24", "S24"]`) | All batches |
+| `filterByIndustry` | List | Filter by industry (e.g., `["B2B", "Fintech"]`) | All industries |
+| `filterByStage` | List | Filter by funding stage (e.g., `["Seed", "Series A"]`) | All stages |
+| `filterByLocation` | List | Filter by location (e.g., `["Remote", "San Francisco"]`) | All locations |
+| `topCompaniesOnly` | Boolean | Only scrape YC top companies | `false` |
+| `includeFounderDescriptions` | Boolean | Include founder bios | `true` |
+| `rateLimitDelay` | Number | Delay between requests (seconds) | `1.5` |
 
-## Output Data Structure
+### Example Input
 
-Each record in the dataset contains:
+```json
+{
+  "maxCompanies": 50,
+  "filterByBatch": ["W24", "S24"],
+  "filterByIndustry": ["B2B", "AI"],
+  "filterByStage": ["Seed", "Series A"],
+  "topCompaniesOnly": false,
+  "includeFounderDescriptions": true,
+  "rateLimitDelay": 1.5
+}
+```
+
+## Output Example
+
+Each result contains complete company, founder, and job data:
 
 ```json
 {
@@ -46,7 +122,6 @@ Each record in the dataset contains:
     "id": 271,
     "name": "Airbnb",
     "slug": "airbnb",
-    "formerNames": [],
     "tagline": "Book accommodations around the world.",
     "longDescription": "Founded in August of 2008...",
     "website": "http://airbnb.com",
@@ -58,7 +133,6 @@ Each record in the dataset contains:
     "status": "Public",
     "stage": "Growth",
     "industry": "Consumer",
-    "subindustry": "Consumer -> Travel, Leisure and Tourism",
     "industries": ["Consumer", "Travel, Leisure and Tourism"],
     "tags": ["Marketplace", "Travel"],
     "topCompany": true,
@@ -76,7 +150,7 @@ Each record in the dataset contains:
     {
       "name": "Brian Chesky",
       "role": "Founder/CEO",
-      "description": "Brian Chesky is the co-founder, Head of Community, and CEO of Airbnb...",
+      "description": "Brian Chesky is the co-founder and CEO of Airbnb...",
       "linkedin": "https://www.linkedin.com/in/brianchesky/",
       "twitter": "https://twitter.com/bchesky"
     }
@@ -84,25 +158,25 @@ Each record in the dataset contains:
   "jobs": [
     {
       "jobId": "yaLKuLq",
-      "title": "Head of Engineering, Identity Graph",
-      "jobUrl": "https://ycombinator.com/companies/stripe/jobs/yaLKuLq",
+      "title": "Senior Software Engineer",
+      "jobUrl": "https://ycombinator.com/companies/airbnb/jobs/yaLKuLq",
       "location": "San Francisco / Remote",
       "salary": {
-        "min": 140000,
-        "max": 250000,
+        "min": 180000,
+        "max": 280000,
         "currency": "USD"
       },
       "equity": {
-        "min": 0.10,
-        "max": 0.40
+        "min": 0.01,
+        "max": 0.05
       },
       "jobType": "Full-time",
       "roleCategory": "Engineering, Backend",
-      "experience": "11+ years",
+      "experience": "5+ years",
       "visa": "Will sponsor",
-      "skills": ["Java"],
-      "description": "Before Stripe, every growing internet platform had a payments team...",
-      "interviewProcess": "Show and describe to us something you have built.",
+      "skills": ["Python", "Distributed Systems", "AWS"],
+      "description": "Join our platform team to build scalable infrastructure...",
+      "interviewProcess": "Technical phone screen, system design, onsite with team",
       "applyUrl": "https://account.ycombinator.com/authenticate?continue=..."
     }
   ],
@@ -110,79 +184,38 @@ Each record in the dataset contains:
 }
 ```
 
-## Data Sources
+## How to Use
 
-### 1. hiring.json API
-Primary source for company metadata (no scraping needed):
-- Company ID, name, slug, former names
-- Logo, website, locations, description
-- Industry, batch, stage, status
-- Tags, team size, regions
+1. **Set your filters** - Use the input parameters to target specific batches, industries, stages, or locations
+2. **Run the scraper** - Click "Start" and wait for the extraction to complete
+3. **Export your data** - Download results in JSON, CSV, Excel, or connect via API
 
-### 2. Company Page (`/companies/{slug}`)
-Scraped for additional data:
-- Social links (LinkedIn, Twitter, GitHub, Facebook, Crunchbase)
-- Founder information (name, role, description, social links)
-- Founded year
+## Integrations
 
-### 3. Job Page (`/companies/{slug}/jobs/{job-id}`)
-Scraped for complete job details:
-- Job title, location, type
-- Salary and equity ranges
-- Skills, experience requirements
-- Full job description
-- Interview process
-- Apply URL
-- Backup founder data (if not available on company page)
+Connect Y Combinator Jobs Scraper with your favorite tools:
 
-## Founder Data Merging
+- **Google Sheets** - Automatically sync job data to spreadsheets
+- **Airtable / Notion** - Build your own job tracking database
+- **Zapier / Make / n8n** - Trigger workflows when new jobs are found
+- **Slack** - Get notifications for new job postings
+- **Your own API** - Use webhooks for real-time data delivery
 
-Founder information may appear on both company pages and job pages. The actor uses a smart merging strategy:
+## Technical Details
 
-1. Uses company page founders as the primary source (usually more complete)
-2. Fills in missing data from job page founders
-3. Prefers longer descriptions when available
-4. Merges social links from both sources
+### Data Sources
 
-## Error Handling
+1. **YC Hiring API** - Primary source for company metadata
+2. **Company Pages** (`/companies/{slug}`) - Social links, founders, founded year
+3. **Job Pages** (`/companies/{slug}/jobs/{job-id}`) - Complete job details
 
-- Retries failed requests with exponential backoff (3 retries)
-- Skips companies with no job listings gracefully
-- Logs and continues on individual page failures
-- Validates data with Pydantic models before output
-- Handles missing optional fields (equity, interview process, some social links)
-- Rate limiting to avoid being blocked (configurable delay between requests)
+### Features
 
-## Dependencies
+- Smart founder data merging from multiple sources
+- Automatic retries with exponential backoff
+- Rate limiting to avoid blocks
+- Pydantic data validation
+- Handles missing optional fields gracefully
 
-- `apify>=2.0.0` - Apify SDK
-- `crawl4ai>=0.7.4` - Web scraping framework
-- `pydantic>=2.0.0` - Data validation
-- `aiohttp>=3.9.0` - Async HTTP client
-- `beautifulsoup4>=4.12.0` - HTML parsing
-- `lxml>=5.0.0` - XML/HTML parser
+## Feedback
 
-## Local Development
-
-1. Install dependencies:
-```bash
-pip install -r requirements.txt
-```
-
-2. Set up Apify credentials (if testing locally):
-```bash
-export APIFY_TOKEN=your_token_here
-```
-
-3. Run the actor:
-```bash
-python -m src
-```
-
-## Notes
-
-- Not all jobs have equity information
-- "About the interview" section is optional and may not be present for all jobs
-- Social links vary by company (some have all, others have only a few)
-- Founder descriptions are typically more complete on company pages
-- The actor respects rate limits to avoid being blocked
+Found a bug or have a feature request? Please create an issue on the Actor's Issues tab in Apify Console. We're always working to improve this scraper!
