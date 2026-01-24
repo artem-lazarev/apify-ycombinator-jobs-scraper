@@ -48,10 +48,8 @@ class Job(BaseModel):
     roleCategory: Optional[str] = None
     experience: Optional[str] = None
     visa: Optional[str] = None
-    skills: List[str] = Field(default_factory=list)
     description: Optional[str] = None
     interviewProcess: Optional[str] = None
-    applyUrl: Optional[str] = None
 
 
 class Company(BaseModel):

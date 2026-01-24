@@ -161,12 +161,10 @@ def _extract_founders(soup: BeautifulSoup) -> List[Dict]:
     """
     Extract founders from the "Active Founders" section.
     
-    Each founder card contains:
-    - Image
-    - Name (usually in a heading or strong element)
-    - Social links (Twitter icon linking to their Twitter, LinkedIn icon)
-    - Role (e.g., "Founder/CEO")
-    - Description paragraph
+    The page structure is predictable:
+    - "Active Founders" heading
+    - For each founder: Image (with name as alt) → Name → Social links → Role → Description
+    - Section ends at "Latest News" or similar heading
     """
     founders = []
     seen_names = set()
@@ -178,111 +176,144 @@ def _extract_founders(soup: BeautifulSoup) -> List[Dict]:
         # Try alternative: just "Founders"
         founders_heading = soup.find(string=lambda text: text and text.strip() == 'Founders' if text else False)
     
-    if founders_heading:
-        # Find the container holding all founder cards
-        container = founders_heading.find_parent(['div', 'section'])
-        if container:
-            # Go up a few levels to get the full founders section
-            for _ in range(5):
-                if container.parent and container.parent.name in ['div', 'section']:
-                    container = container.parent
+    if not founders_heading:
+        return founders
+    
+    # Get the parent container and find the section boundaries
+    container = founders_heading.find_parent(['div', 'section'])
+    if not container:
+        return founders
+    
+    # Go up to get the full founders section
+    for _ in range(5):
+        if container.parent and container.parent.name in ['div', 'section']:
+            container = container.parent
+    
+    # Get the text content of the founders section
+    # We'll extract everything between "Active Founders" and the next major section
+    full_text = container.get_text(separator='\n', strip=True)
+    
+    # Find the founders section boundaries
+    start_idx = full_text.find('Active Founders')
+    if start_idx == -1:
+        start_idx = 0
+    else:
+        start_idx += len('Active Founders')
+    
+    # Find where founders section ends (next major section)
+    end_markers = ['Latest News', 'Company Launches', 'Jobs at', 'YC Photos', 'Founded:']
+    end_idx = len(full_text)
+    for marker in end_markers:
+        idx = full_text.find(marker, start_idx)
+        if idx != -1 and idx < end_idx:
+            end_idx = idx
+    
+    founders_text = full_text[start_idx:end_idx]
+    
+    # Find all founder images in the section (they have person names as alt text)
+    # This gives us the list of founder names
+    founder_names = []
+    for img in container.find_all('img', alt=True):
+        alt_text = img.get('alt', '').strip()
+        
+        # Skip non-person images and known non-founder names
+        skip_terms = ['Twitter', 'LinkedIn', 'Logo', 'photo', 'image', 'icon', 'video', 'YouTube', 
+                      'Y Combinator', 'Combinator', 'YC']
+        if not alt_text or any(term.lower() in alt_text.lower() for term in skip_terms):
+            continue
+        
+        # Check if it looks like a name (2-4 words, capitalized)
+        words = alt_text.split()
+        if len(words) >= 2 and len(words) <= 4 and words[0][0].isupper():
+            # IMPORTANT: Only include names that actually appear in the founders section text
+            # This prevents picking up random images from other parts of the page
+            if alt_text in founders_text and alt_text not in founder_names:
+                founder_names.append(alt_text)
+    
+    # Now extract info for each founder from the text
+    # Role keywords to identify roles
+    role_keywords = ['CEO', 'CTO', 'COO', 'CFO', 'Founder', 'Co-founder', 'Cofounder', 'Partner', 'President']
+    
+    for name in founder_names:
+        if name in seen_names:
+            continue
+        seen_names.add(name)
+        
+        founder = {
+            'name': name,
+            'role': None,
+            'description': None,
+            'linkedin': None,
+            'twitter': None
+        }
+        
+        # Find this founder's section in the text
+        # Look for the name and extract the role and description that follow
+        name_idx = founders_text.find(name)
+        if name_idx == -1:
+            continue
+        
+        # Get text after the name (up to next founder or end)
+        next_founder_idx = len(founders_text)
+        for other_name in founder_names:
+            if other_name != name:
+                idx = founders_text.find(other_name, name_idx + len(name))
+                if idx != -1 and idx < next_founder_idx:
+                    next_founder_idx = idx
+        
+        founder_section = founders_text[name_idx:next_founder_idx]
+        lines = [line.strip() for line in founder_section.split('\n') if line.strip()]
+        
+        # Parse the lines: Name → Role → Description
+        for i, line in enumerate(lines):
+            # Skip the name itself
+            if line == name:
+                continue
             
-            # Find all founder cards - they usually have images with founder names as alt text
-            founder_images = container.find_all('img', alt=True)
+            # Check if this is a role line
+            if any(keyword in line for keyword in role_keywords) and len(line) < 50:
+                if not founder['role']:
+                    founder['role'] = line
+                continue
             
-            for img in founder_images:
-                alt_text = img.get('alt', '')
-                # Skip non-founder images (logos, icons, etc.)
-                if not alt_text or alt_text in ['Twitter account', 'X (Twitter) logo', 'LinkedIn', 'Y Combinator Logo']:
-                    continue
+            # Check if this is a description (long text, often starts with the founder's name)
+            if len(line) > 80:
+                if not founder['description']:
+                    founder['description'] = line
+                break
+        
+        # Extract social links from the HTML for this founder
+        # Find the founder's image and look for links in the same card
+        founder_img = container.find('img', alt=name)
+        if founder_img:
+            # Go up to find the founder card container
+            card = founder_img
+            for _ in range(6):
+                if card.parent:
+                    card = card.parent
+                    # Check if this card has social links and role text
+                    card_text = card.get_text()
+                    card_links = card.find_all('a', href=True)
+                    has_personal_linkedin = any('linkedin.com/in/' in (l.get('href', '') or '').lower() for l in card_links)
+                    has_role = any(kw in card_text for kw in role_keywords)
+                    if has_personal_linkedin and has_role:
+                        break
+            
+            # Extract links from the card
+            for link in card.find_all('a', href=True):
+                href = link.get('href', '')
+                href_lower = href.lower()
                 
-                # Skip if it's a company logo (usually small)
-                src = img.get('src', '')
-                if 'small_logos' in src or 'logos/' in src:
-                    continue
-                
-                # The alt text is usually the founder's name
-                founder_name = alt_text.strip()
-                
-                # Skip duplicates (YC pages sometimes show founders twice)
-                if founder_name in seen_names:
-                    continue
-                seen_names.add(founder_name)
-                
-                # Find the card container for this founder - go up multiple levels
-                card = img
-                for _ in range(8):
-                    if card.parent:
-                        card = card.parent
-                        # Check if this contains the founder's social links and role
-                        card_links = card.find_all('a', href=True)
-                        card_text = card.get_text()
-                        has_founder_links = any(
-                            'linkedin.com/in/' in (l.get('href', '') or '').lower() or
-                            'x.com/' in (l.get('href', '') or '').lower() or
-                            'twitter.com/' in (l.get('href', '') or '').lower()
-                            for l in card_links
-                        )
-                        has_role = any(keyword in card_text for keyword in ['CEO', 'CTO', 'Founder', 'COO', 'CFO'])
-                        
-                        if has_founder_links and has_role:
-                            break
-                
-                founder = _extract_founder_from_card_v2(card, founder_name)
-                if founder and founder.get('name'):
-                    founders.append(founder)
+                if 'linkedin.com/in/' in href_lower and not founder['linkedin']:
+                    founder['linkedin'] = href
+                elif ('x.com/' in href_lower or 'twitter.com/' in href_lower) and not founder['twitter']:
+                    # Skip company twitter (usually has _HQ or company name)
+                    if '_HQ' not in href and 'ycombinator' not in href_lower:
+                        founder['twitter'] = href
+        
+        founders.append(founder)
     
     return founders
-
-
-def _extract_founder_from_card_v2(card: Tag, name_hint: str = None) -> Optional[Dict]:
-    """Extract founder information from a card element (improved version)."""
-    founder = {
-        'name': name_hint,
-        'role': None,
-        'description': None,
-        'linkedin': None,
-        'twitter': None
-    }
-    
-    # Get all text content to find role and description
-    all_text = card.get_text(separator='\n', strip=True)
-    lines = [line.strip() for line in all_text.split('\n') if line.strip()]
-    
-    # Find role - usually contains CEO, CTO, Founder, etc.
-    role_keywords = ['CEO', 'CTO', 'COO', 'CFO', 'Founder', 'Co-founder', 'Cofounder', 'Partner']
-    for line in lines:
-        if any(keyword in line for keyword in role_keywords):
-            # This is likely the role
-            if len(line) < 100:  # Role shouldn't be too long
-                founder['role'] = line
-                break
-    
-    # Find description - usually the longest text block
-    for line in lines:
-        if len(line) > 100 and line != founder.get('role'):
-            # Skip if it's just repeated name or role
-            if name_hint and line.startswith(name_hint):
-                continue
-            founder['description'] = line
-            break
-    
-    # Extract LinkedIn and Twitter links
-    for link in card.find_all('a', href=True):
-        href = link.get('href', '')
-        href_lower = href.lower()
-        
-        # Personal LinkedIn (/in/) for founders
-        if 'linkedin.com/in/' in href_lower and not founder['linkedin']:
-            founder['linkedin'] = href
-        # Twitter/X
-        elif ('twitter.com/' in href_lower or 'x.com/' in href_lower) and not founder['twitter']:
-            founder['twitter'] = href
-    
-    # Only return if we have at least a name
-    if founder['name']:
-        return founder
-    return None
 
 
 def _extract_jobs_from_company_page(soup: BeautifulSoup) -> List[Dict]:
@@ -456,10 +487,8 @@ def parse_job_page(html: str) -> Dict:
         'roleCategory': None,
         'experience': None,
         'visa': None,
-        'skills': [],
         'description': None,
         'interviewProcess': None,
-        'applyUrl': None,
         'founders': []  # Backup founder data
     }
     
@@ -702,33 +731,6 @@ def parse_job_page(html: str) -> Dict:
             sentences = re.split(r'(?<=[.!?])\s+', interview_text)
             if sentences:
                 result['interviewProcess'] = ' '.join(sentences[:3])
-    
-    # Extract apply URL
-    # Look for links containing "apply" in text or href
-    apply_patterns = ['apply to role', 'apply now', 'apply ›', 'apply']
-    for pattern in apply_patterns:
-        apply_link = soup.find('a', href=True, string=lambda text: text and pattern in text.lower() if text else False)
-        if apply_link:
-            result['applyUrl'] = apply_link['href']
-            break
-    
-    # Fallback: look for workatastartup.com links
-    if not result['applyUrl']:
-        for link in soup.find_all('a', href=True):
-            href = link.get('href', '')
-            if 'workatastartup.com' in href or 'application' in href:
-                result['applyUrl'] = href
-                break
-    
-    # Extract skills (often in bullet points within the description)
-    # Look for technology keywords mentioned
-    tech_keywords = ['Python', 'JavaScript', 'TypeScript', 'React', 'Node.js', 'Go', 'Rust',
-                     'C++', 'Java', 'Kubernetes', 'Docker', 'AWS', 'GCP', 'Azure', 'SQL',
-                     'PostgreSQL', 'MongoDB', 'Redis', 'GraphQL', 'REST API']
-    for keyword in tech_keywords:
-        if keyword.lower() in page_text.lower():
-            if keyword not in result['skills']:
-                result['skills'].append(keyword)
     
     return result
 

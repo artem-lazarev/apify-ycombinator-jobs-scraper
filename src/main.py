@@ -40,6 +40,10 @@ def filter_companies(
     """Filter companies based on input criteria."""
     filtered = companies
     
+    # Filter to only companies that are actively hiring
+    filtered = [c for c in filtered if c.get('isHiring', False) is True]
+    logger.info(f"Filtered to {len(filtered)} companies with isHiring=True")
+    
     # Filter by batch
     if filter_by_batch:
         filtered = [c for c in filtered if c.get('batch') in filter_by_batch]
@@ -179,10 +183,8 @@ def build_job_from_parsed(job_data: Dict, slug: str, job_id: str) -> Job:
         roleCategory=job_data.get('roleCategory'),
         experience=job_data.get('experience'),
         visa=job_data.get('visa'),
-        skills=job_data.get('skills', []),
         description=job_data.get('description'),
-        interviewProcess=job_data.get('interviewProcess'),
-        applyUrl=job_data.get('applyUrl')
+        interviewProcess=job_data.get('interviewProcess')
     )
 
 
@@ -222,10 +224,8 @@ def build_job_from_company_page(job_data: Dict, slug: str) -> Job:
         roleCategory=None,  # Not available on company page
         experience=job_data.get('experience'),
         visa=None,  # Not available on company page
-        skills=[],  # Not available on company page
         description=None,  # Not available on company page
-        interviewProcess=None,  # Not available on company page
-        applyUrl=None  # Could be constructed but not needed
+        interviewProcess=None  # Not available on company page
     )
 
 
@@ -298,10 +298,8 @@ async def process_company(
                         'roleCategory': job_page_data.get('roleCategory'),
                         'experience': job_page_data.get('experience') or job_data.get('experience'),
                         'visa': job_page_data.get('visa'),
-                        'skills': job_page_data.get('skills', []),
                         'description': job_page_data.get('description'),
                         'interviewProcess': job_page_data.get('interviewProcess'),
-                        'applyUrl': job_page_data.get('applyUrl'),
                     }
                     
                     job = build_job_from_parsed(merged_job_data, slug, job_id)
