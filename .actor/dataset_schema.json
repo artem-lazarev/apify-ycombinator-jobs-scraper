@@ -1,21 +1,25 @@
 {
   "actorSpecification": 1,
+  "title": "YC Jobs Scraper Dataset",
+  "description": "Dataset schema for YC companies, jobs, and founders scraped from Y Combinator",
   "views": {
     "overview": {
       "title": "YC Companies & Jobs",
+      "description": "Complete overview of all scraped YC companies with their jobs and founders",
       "transformation": {
         "flatten": ["company"],
         "fields": [
           "company.logoUrl",
           "company.name",
+          "company.tagline",
           "company.website",
-          "company.longDescription",
           "jobs",
           "founders",
           "company.ycBatch",
           "company.foundedYear",
           "company.teamSize",
           "company.industry",
+          "company.subindustry",
           "company.status",
           "company.stage",
           "company.allLocations",
@@ -38,13 +42,13 @@
             "label": "Company",
             "format": "text"
           },
+          "company.tagline": {
+            "label": "Tagline",
+            "format": "text"
+          },
           "company.website": {
             "label": "Website",
             "format": "link"
-          },
-          "company.longDescription": {
-            "label": "Description",
-            "format": "text"
           },
           "jobs": {
             "label": "Open Jobs",
@@ -70,6 +74,10 @@
             "label": "Industry",
             "format": "text"
           },
+          "company.subindustry": {
+            "label": "Sub-Industry",
+            "format": "text"
+          },
           "company.status": {
             "label": "Status",
             "format": "text"
@@ -79,7 +87,7 @@
             "format": "text"
           },
           "company.allLocations": {
-            "label": "Location",
+            "label": "Locations",
             "format": "text"
           },
           "company.regions": {
@@ -108,6 +116,530 @@
           }
         }
       }
+    },
+    "jobs": {
+      "title": "All Jobs",
+      "description": "Flat list of all job listings across all YC companies",
+      "transformation": {
+        "flatten": ["company", "jobs"],
+        "unwind": ["jobs"],
+        "fields": [
+          "company.logoUrl",
+          "company.name",
+          "company.website",
+          "jobs.title",
+          "jobs.jobUrl",
+          "jobs.location",
+          "jobs.salary",
+          "jobs.equity",
+          "jobs.jobType",
+          "jobs.roleCategory",
+          "jobs.experience",
+          "jobs.visa",
+          "company.ycBatch",
+          "company.stage",
+          "company.industry",
+          "company.teamSize",
+          "company.topCompany"
+        ]
+      },
+      "display": {
+        "component": "table",
+        "properties": {
+          "company.logoUrl": {
+            "label": "Logo",
+            "format": "image"
+          },
+          "company.name": {
+            "label": "Company",
+            "format": "text"
+          },
+          "company.website": {
+            "label": "Website",
+            "format": "link"
+          },
+          "jobs.title": {
+            "label": "Job Title",
+            "format": "text"
+          },
+          "jobs.jobUrl": {
+            "label": "Apply",
+            "format": "link"
+          },
+          "jobs.location": {
+            "label": "Location",
+            "format": "text"
+          },
+          "jobs.salary": {
+            "label": "Salary",
+            "format": "object"
+          },
+          "jobs.equity": {
+            "label": "Equity",
+            "format": "object"
+          },
+          "jobs.jobType": {
+            "label": "Job Type",
+            "format": "text"
+          },
+          "jobs.roleCategory": {
+            "label": "Role Category",
+            "format": "text"
+          },
+          "jobs.experience": {
+            "label": "Experience",
+            "format": "text"
+          },
+          "jobs.visa": {
+            "label": "Visa Sponsorship",
+            "format": "text"
+          },
+          "company.ycBatch": {
+            "label": "YC Batch",
+            "format": "text"
+          },
+          "company.stage": {
+            "label": "Stage",
+            "format": "text"
+          },
+          "company.industry": {
+            "label": "Industry",
+            "format": "text"
+          },
+          "company.teamSize": {
+            "label": "Team Size",
+            "format": "number"
+          },
+          "company.topCompany": {
+            "label": "Top Company",
+            "format": "boolean"
+          }
+        }
+      }
+    },
+    "founders": {
+      "title": "All Founders",
+      "description": "Flat list of all founders across all YC companies",
+      "transformation": {
+        "flatten": ["company", "founders"],
+        "unwind": ["founders"],
+        "fields": [
+          "company.logoUrl",
+          "company.name",
+          "company.website",
+          "founders.name",
+          "founders.role",
+          "founders.description",
+          "founders.linkedin",
+          "founders.twitter",
+          "company.ycBatch",
+          "company.stage",
+          "company.industry",
+          "company.topCompany"
+        ]
+      },
+      "display": {
+        "component": "table",
+        "properties": {
+          "company.logoUrl": {
+            "label": "Company Logo",
+            "format": "image"
+          },
+          "company.name": {
+            "label": "Company",
+            "format": "text"
+          },
+          "company.website": {
+            "label": "Website",
+            "format": "link"
+          },
+          "founders.name": {
+            "label": "Founder Name",
+            "format": "text"
+          },
+          "founders.role": {
+            "label": "Role",
+            "format": "text"
+          },
+          "founders.description": {
+            "label": "Bio",
+            "format": "text"
+          },
+          "founders.linkedin": {
+            "label": "LinkedIn",
+            "format": "link"
+          },
+          "founders.twitter": {
+            "label": "Twitter",
+            "format": "link"
+          },
+          "company.ycBatch": {
+            "label": "YC Batch",
+            "format": "text"
+          },
+          "company.stage": {
+            "label": "Stage",
+            "format": "text"
+          },
+          "company.industry": {
+            "label": "Industry",
+            "format": "text"
+          },
+          "company.topCompany": {
+            "label": "Top Company",
+            "format": "boolean"
+          }
+        }
+      }
+    },
+    "companies": {
+      "title": "Companies Only",
+      "description": "Company information without job or founder details",
+      "transformation": {
+        "flatten": ["company"],
+        "fields": [
+          "company.logoUrl",
+          "company.name",
+          "company.slug",
+          "company.tagline",
+          "company.longDescription",
+          "company.website",
+          "company.ycUrl",
+          "company.ycBatch",
+          "company.foundedYear",
+          "company.teamSize",
+          "company.status",
+          "company.stage",
+          "company.industry",
+          "company.subindustry",
+          "company.industries",
+          "company.tags",
+          "company.topCompany",
+          "company.allLocations",
+          "company.regions",
+          "company.socialLinks",
+          "scrapedAt"
+        ]
+      },
+      "display": {
+        "component": "table",
+        "properties": {
+          "company.logoUrl": {
+            "label": "Logo",
+            "format": "image"
+          },
+          "company.name": {
+            "label": "Company",
+            "format": "text"
+          },
+          "company.slug": {
+            "label": "Slug",
+            "format": "text"
+          },
+          "company.tagline": {
+            "label": "Tagline",
+            "format": "text"
+          },
+          "company.longDescription": {
+            "label": "Description",
+            "format": "text"
+          },
+          "company.website": {
+            "label": "Website",
+            "format": "link"
+          },
+          "company.ycUrl": {
+            "label": "YC Profile",
+            "format": "link"
+          },
+          "company.ycBatch": {
+            "label": "YC Batch",
+            "format": "text"
+          },
+          "company.foundedYear": {
+            "label": "Founded",
+            "format": "number"
+          },
+          "company.teamSize": {
+            "label": "Team Size",
+            "format": "number"
+          },
+          "company.status": {
+            "label": "Status",
+            "format": "text"
+          },
+          "company.stage": {
+            "label": "Stage",
+            "format": "text"
+          },
+          "company.industry": {
+            "label": "Industry",
+            "format": "text"
+          },
+          "company.subindustry": {
+            "label": "Sub-Industry",
+            "format": "text"
+          },
+          "company.industries": {
+            "label": "Industries",
+            "format": "array"
+          },
+          "company.tags": {
+            "label": "Tags",
+            "format": "array"
+          },
+          "company.topCompany": {
+            "label": "Top Company",
+            "format": "boolean"
+          },
+          "company.allLocations": {
+            "label": "Locations",
+            "format": "text"
+          },
+          "company.regions": {
+            "label": "Regions",
+            "format": "array"
+          },
+          "company.socialLinks": {
+            "label": "Social Links",
+            "format": "object"
+          },
+          "scrapedAt": {
+            "label": "Scraped At",
+            "format": "date"
+          }
+        }
+      }
+    }
+  },
+  "fields": {
+    "company": {
+      "type": "object",
+      "title": "Company",
+      "description": "Company information from Y Combinator",
+      "properties": {
+        "id": {
+          "type": "integer",
+          "title": "Company ID",
+          "description": "Unique identifier for the company"
+        },
+        "name": {
+          "type": "string",
+          "title": "Company Name",
+          "description": "Name of the company"
+        },
+        "slug": {
+          "type": "string",
+          "title": "URL Slug",
+          "description": "URL-friendly identifier for the company"
+        },
+        "formerNames": {
+          "type": "array",
+          "title": "Former Names",
+          "description": "Previous names of the company"
+        },
+        "tagline": {
+          "type": "string",
+          "title": "Tagline",
+          "description": "Company one-liner/tagline"
+        },
+        "longDescription": {
+          "type": "string",
+          "title": "Description",
+          "description": "Detailed description of the company"
+        },
+        "website": {
+          "type": "string",
+          "title": "Website",
+          "description": "Company website URL"
+        },
+        "logoUrl": {
+          "type": "string",
+          "title": "Logo URL",
+          "description": "URL to the company logo"
+        },
+        "ycUrl": {
+          "type": "string",
+          "title": "YC Profile URL",
+          "description": "Y Combinator profile page URL"
+        },
+        "ycBatch": {
+          "type": "string",
+          "title": "YC Batch",
+          "description": "Y Combinator batch (e.g., W24, S23)"
+        },
+        "foundedYear": {
+          "type": "integer",
+          "title": "Founded Year",
+          "description": "Year the company was founded"
+        },
+        "teamSize": {
+          "type": "integer",
+          "title": "Team Size",
+          "description": "Number of employees"
+        },
+        "status": {
+          "type": "string",
+          "title": "Status",
+          "description": "Company status (Active, Acquired, etc.)"
+        },
+        "stage": {
+          "type": "string",
+          "title": "Stage",
+          "description": "Funding stage (Seed, Series A, etc.)"
+        },
+        "industry": {
+          "type": "string",
+          "title": "Industry",
+          "description": "Primary industry"
+        },
+        "subindustry": {
+          "type": "string",
+          "title": "Sub-Industry",
+          "description": "Sub-industry classification"
+        },
+        "industries": {
+          "type": "array",
+          "title": "Industries",
+          "description": "List of industries"
+        },
+        "tags": {
+          "type": "array",
+          "title": "Tags",
+          "description": "Company tags/categories"
+        },
+        "topCompany": {
+          "type": "boolean",
+          "title": "Top Company",
+          "description": "Whether this is a top YC company"
+        },
+        "allLocations": {
+          "type": "string",
+          "title": "All Locations",
+          "description": "Company locations as text"
+        },
+        "regions": {
+          "type": "array",
+          "title": "Regions",
+          "description": "Geographic regions"
+        },
+        "socialLinks": {
+          "type": "object",
+          "title": "Social Links",
+          "description": "Links to social media profiles (LinkedIn, Twitter, GitHub, etc.)"
+        }
+      }
+    },
+    "founders": {
+      "type": "array",
+      "title": "Founders",
+      "description": "List of company founders",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "description": "Founder's name"
+          },
+          "role": {
+            "type": "string",
+            "title": "Role",
+            "description": "Founder's role/title"
+          },
+          "description": {
+            "type": "string",
+            "title": "Bio",
+            "description": "Founder's biography"
+          },
+          "linkedin": {
+            "type": "string",
+            "title": "LinkedIn",
+            "description": "LinkedIn profile URL"
+          },
+          "twitter": {
+            "type": "string",
+            "title": "Twitter",
+            "description": "Twitter/X profile URL"
+          }
+        }
+      }
+    },
+    "jobs": {
+      "type": "array",
+      "title": "Jobs",
+      "description": "List of open job positions",
+      "items": {
+        "type": "object",
+        "properties": {
+          "jobId": {
+            "type": "string",
+            "title": "Job ID",
+            "description": "Unique identifier for the job"
+          },
+          "title": {
+            "type": "string",
+            "title": "Job Title",
+            "description": "Title of the job position"
+          },
+          "jobUrl": {
+            "type": "string",
+            "title": "Job URL",
+            "description": "URL to the job posting"
+          },
+          "location": {
+            "type": "string",
+            "title": "Location",
+            "description": "Job location (Remote, City, etc.)"
+          },
+          "salary": {
+            "type": "object",
+            "title": "Salary",
+            "description": "Salary range with min, max, currency, and period"
+          },
+          "equity": {
+            "type": "object",
+            "title": "Equity",
+            "description": "Equity range with min and max percentages"
+          },
+          "jobType": {
+            "type": "string",
+            "title": "Job Type",
+            "description": "Type of employment (Full-time, Part-time, Contract)"
+          },
+          "roleCategory": {
+            "type": "string",
+            "title": "Role Category",
+            "description": "Category of the role (Engineering, Design, etc.)"
+          },
+          "experience": {
+            "type": "string",
+            "title": "Experience",
+            "description": "Required experience level"
+          },
+          "visa": {
+            "type": "string",
+            "title": "Visa Sponsorship",
+            "description": "Visa sponsorship availability"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description",
+            "description": "Full job description"
+          },
+          "interviewProcess": {
+            "type": "string",
+            "title": "Interview Process",
+            "description": "Description of the interview process"
+          }
+        }
+      }
+    },
+    "scrapedAt": {
+      "type": "string",
+      "title": "Scraped At",
+      "description": "Timestamp when the data was scraped",
+      "format": "date-time"
     }
   }
 }

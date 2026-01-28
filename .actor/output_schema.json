@@ -1,0 +1,43 @@
+{
+  "actorOutputSchemaVersion": 1,
+  "title": "YC Jobs Scraper Output",
+  "description": "Output schema for YC Jobs Scraper - provides access to scraped YC companies, jobs, and founders data",
+  "properties": {
+    "results": {
+      "type": "string",
+      "title": "All Results",
+      "description": "Complete dataset with companies, jobs, and founders",
+      "template": "{{links.apiDefaultDatasetUrl}}/items"
+    },
+    "overview": {
+      "type": "string",
+      "title": "Overview",
+      "description": "Overview of all scraped YC companies with their jobs and founders",
+      "template": "{{links.apiDefaultDatasetUrl}}/items?view=overview"
+    },
+    "jobs": {
+      "type": "string",
+      "title": "Jobs Only",
+      "description": "Flat list of all job listings across all companies",
+      "template": "{{links.apiDefaultDatasetUrl}}/items?view=jobs"
+    },
+    "founders": {
+      "type": "string",
+      "title": "Founders Only",
+      "description": "Flat list of all founders across all companies",
+      "template": "{{links.apiDefaultDatasetUrl}}/items?view=founders"
+    },
+    "companies": {
+      "type": "string",
+      "title": "Companies Only",
+      "description": "Company information without jobs or founders details",
+      "template": "{{links.apiDefaultDatasetUrl}}/items?view=companies"
+    },
+    "summary": {
+      "type": "string",
+      "title": "Run Summary",
+      "description": "Summary statistics of the scraping run (total companies, jobs, founders)",
+      "template": "{{links.apiDefaultKeyValueStoreUrl}}/records/OUTPUT"
+    }
+  }
+}

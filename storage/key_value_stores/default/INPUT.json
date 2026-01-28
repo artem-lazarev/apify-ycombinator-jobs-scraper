@@ -1,11 +1,11 @@
 {
   "filterByBatch": [],
-  "filterByIndustry": ["Fintech"],
+  "filterByIndustry": [],
   "filterByStage": [],
   "filterByLocation": [],
   "topCompaniesOnly": false,
   "includeFounderDescriptions": true,
   "includeJobDetails": true,
-  "rateLimitDelay": 1.5,
-  "maxCompanies": 10
+  "rateLimitDelay": 1,
+  "maxCompanies": 1500
 }

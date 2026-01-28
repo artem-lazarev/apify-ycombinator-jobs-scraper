@@ -1,0 +1,12 @@
+{
+  "actorSpecification": 1,
+  "title": "YC Jobs Scraper Key-Value Store",
+  "description": "Key-value store schema for YC Jobs Scraper output files",
+  "collections": {
+    "summary": {
+      "title": "Run Summary",
+      "description": "Summary statistics from the scraping run",
+      "keyPrefix": "OUTPUT"
+    }
+  }
+}
