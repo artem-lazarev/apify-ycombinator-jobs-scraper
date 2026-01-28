@@ -1,5 +1,5 @@
 {
-  "actorSpecification": 1,
+  "actorKeyValueStoreSchemaVersion": 1,
   "title": "YC Jobs Scraper Key-Value Store",
   "description": "Key-value store schema for YC Jobs Scraper output files",
   "collections": {
