@@ -118,28 +118,20 @@
       }
     },
     "jobs": {
-      "title": "All Jobs",
-      "description": "Flat list of all job listings across all YC companies",
+      "title": "Jobs by Company",
+      "description": "Companies with their open job listings",
       "transformation": {
-        "flatten": ["company", "jobs"],
-        "unwind": ["jobs"],
+        "flatten": ["company"],
         "fields": [
           "company.logoUrl",
           "company.name",
           "company.website",
-          "jobs.title",
-          "jobs.jobUrl",
-          "jobs.location",
-          "jobs.salary",
-          "jobs.equity",
-          "jobs.jobType",
-          "jobs.roleCategory",
-          "jobs.experience",
-          "jobs.visa",
+          "jobs",
           "company.ycBatch",
           "company.stage",
           "company.industry",
           "company.teamSize",
+          "company.allLocations",
           "company.topCompany"
         ]
       },
@@ -158,41 +150,9 @@
             "label": "Website",
             "format": "link"
           },
-          "jobs.title": {
-            "label": "Job Title",
-            "format": "text"
-          },
-          "jobs.jobUrl": {
-            "label": "Apply",
-            "format": "link"
-          },
-          "jobs.location": {
-            "label": "Location",
-            "format": "text"
-          },
-          "jobs.salary": {
-            "label": "Salary",
-            "format": "object"
-          },
-          "jobs.equity": {
-            "label": "Equity",
-            "format": "object"
-          },
-          "jobs.jobType": {
-            "label": "Job Type",
-            "format": "text"
-          },
-          "jobs.roleCategory": {
-            "label": "Role Category",
-            "format": "text"
-          },
-          "jobs.experience": {
-            "label": "Experience",
-            "format": "text"
-          },
-          "jobs.visa": {
-            "label": "Visa Sponsorship",
-            "format": "text"
+          "jobs": {
+            "label": "Open Jobs",
+            "format": "array"
           },
           "company.ycBatch": {
             "label": "YC Batch",
@@ -210,6 +170,10 @@
             "label": "Team Size",
             "format": "number"
           },
+          "company.allLocations": {
+            "label": "Locations",
+            "format": "text"
+          },
           "company.topCompany": {
             "label": "Top Company",
             "format": "boolean"
@@ -218,20 +182,15 @@
       }
     },
     "founders": {
-      "title": "All Founders",
-      "description": "Flat list of all founders across all YC companies",
+      "title": "Founders by Company",
+      "description": "Companies with their founders",
       "transformation": {
-        "flatten": ["company", "founders"],
-        "unwind": ["founders"],
+        "flatten": ["company"],
         "fields": [
           "company.logoUrl",
           "company.name",
           "company.website",
-          "founders.name",
-          "founders.role",
-          "founders.description",
-          "founders.linkedin",
-          "founders.twitter",
+          "founders",
           "company.ycBatch",
           "company.stage",
           "company.industry",
@@ -242,7 +201,7 @@
         "component": "table",
         "properties": {
           "company.logoUrl": {
-            "label": "Company Logo",
+            "label": "Logo",
             "format": "image"
           },
           "company.name": {
@@ -253,25 +212,9 @@
             "label": "Website",
             "format": "link"
           },
-          "founders.name": {
-            "label": "Founder Name",
-            "format": "text"
-          },
-          "founders.role": {
-            "label": "Role",
-            "format": "text"
-          },
-          "founders.description": {
-            "label": "Bio",
-            "format": "text"
-          },
-          "founders.linkedin": {
-            "label": "LinkedIn",
-            "format": "link"
-          },
-          "founders.twitter": {
-            "label": "Twitter",
-            "format": "link"
+          "founders": {
+            "label": "Founders",
+            "format": "array"
           },
           "company.ycBatch": {
             "label": "YC Batch",

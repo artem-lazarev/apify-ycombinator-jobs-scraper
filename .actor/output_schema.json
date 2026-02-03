@@ -17,14 +17,14 @@
     },
     "jobs": {
       "type": "string",
-      "title": "Jobs Only",
-      "description": "Flat list of all job listings across all companies",
+      "title": "Jobs by Company",
+      "description": "Companies with their open job listings",
       "template": "{{links.apiDefaultDatasetUrl}}/items?view=jobs"
     },
     "founders": {
       "type": "string",
-      "title": "Founders Only",
-      "description": "Flat list of all founders across all companies",
+      "title": "Founders by Company",
+      "description": "Companies with their founders",
       "template": "{{links.apiDefaultDatasetUrl}}/items?view=founders"
     },
     "companies": {
