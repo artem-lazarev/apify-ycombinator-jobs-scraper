@@ -16,3 +16,7 @@ venv/
 
 # Apify
 storage/datasets/
+
+# custom
+internal-docs.md
+
