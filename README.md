@@ -1,6 +1,27 @@
 # Y Combinator Jobs Scraper
 
-Scrape Y Combinator companies and job listings. 2,500+ startups, 2,400+ jobs, 3,300+ founders. Free dataset: https://www.kaggle.com/datasets/lazarun/y-combinator-jobs-enriched (scraped with this API).  
+Scrape Y Combinator companies and job listings. 2,500+ startups, 2,400+ jobs, 3,300+ founders. Free dataset: https://www.kaggle.com/datasets/lazarun/y-combinator-jobs-enriched (scraped with this API). 
+
+## What does Y Combinator Jobs Scraper do?
+
+Y Combinator Jobs Scraper extracts **complete job listing data** from YC companies that are actively hiring. Unlike other YC scrapers that only provide basic company info, this actor dives deep into each job posting to extract:
+
+- **Salary ranges** (min/max with currency)
+- **Equity percentages** (min/max)
+- **Required skills** and experience levels
+- **Interview process details**
+- **Direct apply URLs**
+- **Full founder profiles** with LinkedIn and Twitter
+
+Perfect for recruiters, job boards, market researchers, and anyone tracking the YC startup job market.
+
+## Why scrape Y Combinator jobs?
+
+- **Recruiting & Talent Sourcing:** Find candidates or job opportunities at top YC startups
+- **Salary Benchmarking:** Analyze compensation trends across YC companies by role, location, and stage
+- **Market Research:** Track hiring patterns, in-demand skills, and growth signals in the startup ecosystem
+- **Lead Generation:** Identify fast-growing companies and their decision-makers (founders)
+- **Investment Research:** Monitor hiring activity as a signal of company health and growth
 
 ## Output Data Fields
 
@@ -63,29 +84,6 @@ Scrape Y Combinator companies and job listings. 2,500+ startups, 2,400+ jobs, 3,
 | `description` | String | Full job description |
 | `interviewProcess` | String | Interview process details |
 | `applyUrl` | String (URL) | Direct application URL |
-
-## What does Y Combinator Jobs Scraper do?
-
-Y Combinator Jobs Scraper extracts **complete job listing data** from YC companies that are actively hiring. Unlike other YC scrapers that only provide basic company info, this actor dives deep into each job posting to extract:
-
-- **Salary ranges** (min/max with currency)
-- **Equity percentages** (min/max)
-- **Required skills** and experience levels
-- **Interview process details**
-- **Direct apply URLs**
-- **Full founder profiles** with LinkedIn and Twitter
-
-Perfect for recruiters, job boards, market researchers, and anyone tracking the YC startup job market.
-
-## Why scrape Y Combinator jobs?
-
-- **Recruiting & Talent Sourcing:** Find candidates or job opportunities at top YC startups
-- **Salary Benchmarking:** Analyze compensation trends across YC companies by role, location, and stage
-- **Market Research:** Track hiring patterns, in-demand skills, and growth signals in the startup ecosystem
-- **Lead Generation:** Identify fast-growing companies and their decision-makers (founders)
-- **Investment Research:** Monitor hiring activity as a signal of company health and growth
-
-
 
 ## Input Parameters
 
