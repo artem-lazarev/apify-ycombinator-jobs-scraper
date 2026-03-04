@@ -14,7 +14,7 @@ from src.main import (
     process_company,
 )
 from src.models import Company, CompanyOutput, Founder, Job
-from src.scraper import scrape_company_page, scrape_job_page, scrape_page
+from src.scraper import HEADERS, scrape_company_page, scrape_job_page, scrape_page
 
 
 class _AsyncContext:
@@ -68,6 +68,9 @@ def _build_output(slug: str, jobs_count: int = 1, founders_count: int = 1) -> Co
 
 
 class TestScraperResilience:
+    def test_accept_encoding_excludes_brotli(self):
+        assert HEADERS["Accept-Encoding"] == "gzip, deflate"
+
     @pytest.mark.asyncio
     async def test_scrape_page_success_first_attempt(self):
         html = "<html>ok</html>"
