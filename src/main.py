@@ -2,7 +2,7 @@
 import asyncio
 import logging
 from typing import List, Dict, Optional, Any
-from datetime import datetime
+from datetime import datetime, timezone
 import aiohttp
 from apify import Actor
 
@@ -15,12 +15,89 @@ logger = logging.getLogger(__name__)
 HIRING_JSON_URL = "https://yc-oss.github.io/api/companies/hiring.json"
 
 
+def _to_string_list(value: Any, split_commas: bool = False) -> List[str]:
+    """Normalize list-like values to a list of non-empty strings."""
+    if value is None:
+        return []
+
+    if isinstance(value, str):
+        if split_commas:
+            return [part.strip() for part in value.split(',') if part and part.strip()]
+        normalized = value.strip()
+        return [normalized] if normalized else []
+
+    if isinstance(value, (list, tuple, set)):
+        result = []
+        for item in value:
+            if item is None:
+                continue
+            normalized = str(item).strip()
+            if normalized:
+                result.append(normalized)
+        return result
+
+    normalized = str(value).strip()
+    return [normalized] if normalized else []
+
+
+def _to_optional_int(value: Any) -> Optional[int]:
+    """Parse optional integer values."""
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        return int(value)
+    if isinstance(value, (int, float)):
+        return int(value)
+    if isinstance(value, str):
+        stripped = value.strip()
+        if not stripped:
+            return None
+        try:
+            return int(float(stripped))
+        except ValueError:
+            return None
+    return None
+
+
+def _to_non_negative_float(value: Any, default: float) -> float:
+    """Parse a non-negative float with a default fallback."""
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return default
+    try:
+        return max(float(value), 0.0)
+    except (TypeError, ValueError):
+        return default
+
+
+def _to_bool(value: Any, default: bool) -> bool:
+    """Parse booleans safely, including common string variants."""
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in {"true", "1", "yes", "y", "on"}:
+            return True
+        if normalized in {"false", "0", "no", "n", "off"}:
+            return False
+        return default
+    if isinstance(value, (int, float)):
+        return bool(value)
+    return default
+
+
 async def fetch_hiring_json() -> List[Dict[str, Any]]:
     """Fetch the hiring.json API."""
     async with aiohttp.ClientSession() as session:
         async with session.get(HIRING_JSON_URL) as response:
             if response.status == 200:
                 data = await response.json()
+                if not isinstance(data, list):
+                    logger.error("❌ Unexpected hiring.json payload type: %s", type(data).__name__)
+                    raise Exception("Unexpected hiring.json payload type")
                 logger.info(f"📥 Fetched {len(data)} companies from hiring.json")
                 return data
             else:
@@ -38,41 +115,48 @@ def filter_companies(
     top_companies_only: bool = False
 ) -> List[Dict[str, Any]]:
     """Filter companies based on input criteria."""
-    filtered = companies
+    filtered = [company for company in companies if isinstance(company, dict)]
     
     # Filter to only companies that are actively hiring
     filtered = [c for c in filtered if c.get('isHiring', False) is True]
     logger.info(f"🔍 Filtered to {len(filtered)} companies with isHiring=True")
+
+    batch_filters = _to_string_list(filter_by_batch)
+    industry_filters = _to_string_list(filter_by_industry)
+    stage_filters = _to_string_list(filter_by_stage)
+    location_filters = [loc.lower() for loc in _to_string_list(filter_by_location)]
     
     # Filter by batch
-    if filter_by_batch:
-        filtered = [c for c in filtered if c.get('batch') in filter_by_batch]
+    if batch_filters:
+        filtered = [c for c in filtered if c.get('batch') in batch_filters]
     
     # Filter by industry
-    if filter_by_industry:
+    if industry_filters:
         filtered = [c for c in filtered if any(
-            ind in (c.get('industry', '') or '') or ind in (c.get('subindustry', '') or '')
-            for ind in filter_by_industry
+            ind.lower() in (c.get('industry', '') or '').lower()
+            or ind.lower() in (c.get('subindustry', '') or '').lower()
+            for ind in industry_filters
         )]
     
     # Filter by stage
-    if filter_by_stage:
-        filtered = [c for c in filtered if c.get('stage') in filter_by_stage]
+    if stage_filters:
+        filtered = [c for c in filtered if c.get('stage') in stage_filters]
     
     # Filter by location
-    if filter_by_location:
-        locations_str = (c.get('all_locations', '') or '').lower()
-        filtered = [c for c in filtered if any(
-            loc.lower() in locations_str for loc in filter_by_location
-        )]
+    if location_filters:
+        filtered = [
+            c for c in filtered
+            if any(loc in (c.get('all_locations', '') or '').lower() for loc in location_filters)
+        ]
     
     # Filter top companies only
     if top_companies_only:
         filtered = [c for c in filtered if c.get('top_company', False)]
     
     # Limit by max_companies
-    if max_companies:
-        filtered = filtered[:max_companies]
+    max_companies_int = _to_optional_int(max_companies)
+    if max_companies_int is not None:
+        filtered = filtered[:max(max_companies_int, 0)]
     
     logger.info(f"🔍 Filtered to {len(filtered)} companies")
     return filtered
@@ -93,25 +177,23 @@ def build_company_from_hiring_json(company_data: Dict[str, Any], scraped_data: D
     all_locations = company_data.get('all_locations') or ''
     
     # Parse industries
-    industries = company_data.get('industries', [])
-    if not industries and company_data.get('industry'):
-        industries = [company_data['industry']]
+    industries = _to_string_list(company_data.get('industries'), split_commas=True)
+    if not industries and isinstance(company_data.get('industry'), str):
+        industry = company_data['industry'].strip()
+        industries = [industry] if industry else []
     
     # Parse tags
-    tags = company_data.get('tags', [])
-    if isinstance(tags, str):
-        tags = [t.strip() for t in tags.split(',') if t.strip()]
+    tags = _to_string_list(company_data.get('tags'), split_commas=True)
     
     # Parse regions
-    regions = company_data.get('regions', [])
-    if isinstance(regions, str):
-        regions = [r.strip() for r in regions.split(',') if r.strip()]
+    regions = _to_string_list(company_data.get('regions'), split_commas=True)
+    former_names = _to_string_list(company_data.get('former_names'), split_commas=True)
     
     return Company(
         id=company_data.get('id', 0),
         name=company_data.get('name', ''),
         slug=company_data.get('slug', ''),
-        formerNames=company_data.get('former_names', []),
+        formerNames=former_names,
         tagline=company_data.get('one_liner'),
         longDescription=company_data.get('long_description'),
         website=company_data.get('website'),
@@ -136,7 +218,9 @@ def build_company_from_hiring_json(company_data: Dict[str, Any], scraped_data: D
 def build_founders_from_parsed(parsed_founders: List[Dict]) -> List[Founder]:
     """Build Founder models from parsed data."""
     founders = []
-    for f_data in parsed_founders:
+    for f_data in parsed_founders or []:
+        if not isinstance(f_data, dict):
+            continue
         founder = Founder(
             name=f_data.get('name', ''),
             role=f_data.get('role'),
@@ -153,20 +237,22 @@ def build_job_from_parsed(job_data: Dict, slug: str, job_id: str) -> Job:
     """Build Job model from parsed data."""
     # Build salary
     salary = None
-    if job_data.get('salary'):
+    salary_data = job_data.get('salary')
+    if isinstance(salary_data, dict):
         salary = Salary(
-            min=job_data['salary'].get('min'),
-            max=job_data['salary'].get('max'),
-            currency=job_data['salary'].get('currency', 'USD'),
-            period=job_data['salary'].get('period') or 'yearly'
+            min=salary_data.get('min'),
+            max=salary_data.get('max'),
+            currency=salary_data.get('currency', 'USD'),
+            period=salary_data.get('period') or 'yearly'
         )
     
     # Build equity
     equity = None
-    if job_data.get('equity'):
+    equity_data = job_data.get('equity')
+    if isinstance(equity_data, dict):
         equity = Equity(
-            min=job_data['equity'].get('min'),
-            max=job_data['equity'].get('max')
+            min=equity_data.get('min'),
+            max=equity_data.get('max')
         )
     
     # Build job URL
@@ -194,20 +280,22 @@ def build_job_from_company_page(job_data: Dict, slug: str) -> Job:
     
     # Build salary
     salary = None
-    if job_data.get('salary'):
+    salary_data = job_data.get('salary')
+    if isinstance(salary_data, dict):
         salary = Salary(
-            min=job_data['salary'].get('min'),
-            max=job_data['salary'].get('max'),
-            currency=job_data['salary'].get('currency', 'USD'),
-            period=job_data['salary'].get('period') or 'yearly'
+            min=salary_data.get('min'),
+            max=salary_data.get('max'),
+            currency=salary_data.get('currency', 'USD'),
+            period=salary_data.get('period') or 'yearly'
         )
     
     # Build equity
     equity = None
-    if job_data.get('equity'):
+    equity_data = job_data.get('equity')
+    if isinstance(equity_data, dict):
         equity = Equity(
-            min=job_data['equity'].get('min'),
-            max=job_data['equity'].get('max')
+            min=equity_data.get('min'),
+            max=equity_data.get('max')
         )
     
     # Build job URL
@@ -255,9 +343,11 @@ async def process_company(
     logger.info(f"🏢 Processing company: {company_data.get('name')} ({slug})")
     
     try:
+        safe_rate_limit_delay = _to_non_negative_float(rate_limit_delay, default=0.0)
+
         # Scrape company page
         company_html = await scrape_company_page(slug)
-        await asyncio.sleep(rate_limit_delay)  # Rate limiting
+        await asyncio.sleep(safe_rate_limit_delay)  # Rate limiting
         
         if not company_html:
             logger.warning(f"⚠️ Failed to scrape company page for {slug}")
@@ -265,29 +355,39 @@ async def process_company(
         
         # Parse company page - this extracts social links, founders, AND basic job info
         company_parsed = parse_company_page(company_html)
+        if not isinstance(company_parsed, dict):
+            logger.warning(f"⚠️ Parsed company page for {slug} has unexpected format")
+            return None
         
         # Build company model
         company = build_company_from_hiring_json(company_data, company_parsed)
         
         # Build founders from parsed data
         founders = build_founders_from_parsed(company_parsed.get('founders', []))
+        if not include_founder_descriptions:
+            for founder in founders:
+                founder.description = None
         
         # Build jobs - get basic info from company page, then enrich with job page details
         jobs = []
         job_page_founders = []  # Backup founders from job pages
         
         for job_data in company_parsed.get('jobs', []):
+            if not isinstance(job_data, dict):
+                continue
             job_id = job_data.get('jobId', '')
             
             if include_job_details and job_id:
                 # Scrape individual job page for complete details
                 logger.info(f"📄 Scraping job page: {slug}/jobs/{job_id}")
                 job_html = await scrape_job_page(slug, job_id)
-                await asyncio.sleep(rate_limit_delay)  # Rate limiting
+                await asyncio.sleep(safe_rate_limit_delay)  # Rate limiting
                 
                 if job_html:
                     # Parse job page for full details
                     job_page_data = parse_job_page(job_html)
+                    if not isinstance(job_page_data, dict):
+                        job_page_data = {}
                     
                     # Extract founders from job page as backup (if company page has none)
                     if not founders and not job_page_founders:
@@ -325,6 +425,9 @@ async def process_company(
         # If no founders from company page, use founders from job page
         if not founders and job_page_founders:
             founders = build_founders_from_parsed(job_page_founders)
+            if not include_founder_descriptions:
+                for founder in founders:
+                    founder.description = None
             logger.info(f"👥 Using {len(founders)} founders from job page for {slug}")
         
         # Build output
@@ -332,7 +435,7 @@ async def process_company(
             company=company,
             founders=founders,
             jobs=jobs,
-            scrapedAt=datetime.utcnow()
+            scrapedAt=datetime.now(timezone.utc)
         )
         
         logger.info(f"✅ Processed {company.name}: {len(jobs)} jobs, {len(founders)} founders")
@@ -347,17 +450,18 @@ async def main():
     """Main actor entry point."""
     async with Actor() as actor:
         # Get input
-        input_data = await actor.get_input() or {}
+        raw_input_data = await actor.get_input()
+        input_data = raw_input_data if isinstance(raw_input_data, dict) else {}
         
-        max_companies = input_data.get('maxCompanies')
-        filter_by_batch = input_data.get('filterByBatch', [])
-        filter_by_industry = input_data.get('filterByIndustry', [])
-        filter_by_stage = input_data.get('filterByStage', [])
-        filter_by_location = input_data.get('filterByLocation', [])
-        top_companies_only = input_data.get('topCompaniesOnly', False)
-        include_founder_descriptions = input_data.get('includeFounderDescriptions', True)
-        include_job_details = input_data.get('includeJobDetails', True)
-        rate_limit_delay = input_data.get('rateLimitDelay', 1.5)
+        max_companies = _to_optional_int(input_data.get('maxCompanies'))
+        filter_by_batch = _to_string_list(input_data.get('filterByBatch'))
+        filter_by_industry = _to_string_list(input_data.get('filterByIndustry'))
+        filter_by_stage = _to_string_list(input_data.get('filterByStage'))
+        filter_by_location = _to_string_list(input_data.get('filterByLocation'))
+        top_companies_only = _to_bool(input_data.get('topCompaniesOnly'), default=False)
+        include_founder_descriptions = _to_bool(input_data.get('includeFounderDescriptions'), default=True)
+        include_job_details = _to_bool(input_data.get('includeJobDetails'), default=True)
+        rate_limit_delay = _to_non_negative_float(input_data.get('rateLimitDelay'), default=1.5)
         
         logger.info("🚀 Starting YC Jobs Scraper")
         logger.info(f"⚙️ Input: maxCompanies={max_companies}, includeJobDetails={include_job_details}, filters={input_data}")

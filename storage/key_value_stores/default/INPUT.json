@@ -1,11 +1,6 @@
 {
-  "filterByBatch": [],
-  "filterByIndustry": [],
-  "filterByStage": [],
-  "filterByLocation": [],
-  "topCompaniesOnly": false,
-  "includeFounderDescriptions": true,
-  "includeJobDetails": true,
-  "rateLimitDelay": 1,
-  "maxCompanies": 1500
+  "maxCompanies": 1,
+  "includeJobDetails": false,
+  "includeFounderDescriptions": false,
+  "rateLimitDelay": 0
 }

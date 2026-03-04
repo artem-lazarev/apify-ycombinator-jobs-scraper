@@ -20,3 +20,8 @@ storage/datasets/
 # custom
 internal-docs.md
 
+
+.claude
+.pytest_cache
+.ruff_cache
+

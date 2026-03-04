@@ -4,6 +4,9 @@
   "title": "YC Jobs Scraper",
   "version": "1.0",
   "buildTag": "latest",
+  "meta": {
+    "generatedBy": "Codex GPT-5"
+  },
   "readme": "../README.md",
   "changelog": "./CHANGELOG.md",
   "dockerfile": "./Dockerfile",
