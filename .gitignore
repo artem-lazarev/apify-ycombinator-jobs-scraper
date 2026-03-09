@@ -14,14 +14,18 @@ venv/
 .vscode/
 .DS_Store
 
-# Apify
-storage/datasets/
+
+
 
 # custom
 internal-docs.md
+scripts
+storage/datasets/
 
 
 .claude
 .pytest_cache
 .ruff_cache
+
+
 

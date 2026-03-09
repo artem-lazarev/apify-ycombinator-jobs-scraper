@@ -1,6 +1,5 @@
 {
-  "maxCompanies": 1,
-  "includeJobDetails": false,
-  "includeFounderDescriptions": false,
+  "includeJobDetails": true,
+  "includeFounderDescriptions": true,
   "rateLimitDelay": 0
 }
