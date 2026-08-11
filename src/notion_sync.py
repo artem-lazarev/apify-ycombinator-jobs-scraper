@@ -308,8 +308,8 @@ async def sync_jobs_to_notion(
                     schema: Optional[Dict[str, str]] = None
                     if FETCH_TOOL in available:
                         # An empty result means "could not read", not "no columns".
-                        # Collapsing it to None matters: an empty dict would filter
-                        # every property out and silently create blank pages.
+                        # Collapsing it to None matters: an empty dict would drop
+                        # every column except the title and quietly lose the data.
                         schema = await _fetch_data_source_schema(session, source_id) or None
                         if schema:
                             logger.info(f"🗂️ Target columns: {sorted(schema)}")
