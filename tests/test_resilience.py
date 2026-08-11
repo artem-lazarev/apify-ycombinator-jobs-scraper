@@ -368,7 +368,7 @@ class TestMainAndProcessingResilience:
         actor.push_data.assert_awaited_once()
         actor.set_value.assert_awaited_once_with(
             "OUTPUT",
-            {"totalCompanies": 1, "totalJobs": 2, "totalFounders": 3},
+            {"totalCompanies": 1, "totalJobs": 2, "totalFounders": 3, "notionPagesCreated": 0},
         )
 
     @pytest.mark.asyncio
@@ -402,5 +402,5 @@ class TestMainAndProcessingResilience:
         assert actor.push_data.await_count == 1
         actor.set_value.assert_awaited_once_with(
             "OUTPUT",
-            {"totalCompanies": 1, "totalJobs": 1, "totalFounders": 1},
+            {"totalCompanies": 1, "totalJobs": 1, "totalFounders": 1, "notionPagesCreated": 0},
         )
