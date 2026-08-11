@@ -9,6 +9,7 @@ from apify import Actor
 from .models import Company, CompanyOutput, Founder, Job, SocialLinks, Salary, Equity
 from .scraper import scrape_company_page, scrape_job_page
 from .parsers import parse_company_page, parse_job_page
+from .notion_sync import sync_jobs_to_notion
 
 logger = logging.getLogger(__name__)
 
@@ -57,6 +58,14 @@ def _to_optional_int(value: Any) -> Optional[int]:
         except ValueError:
             return None
     return None
+
+
+def _to_optional_str(value: Any) -> Optional[str]:
+    """Parse an optional non-empty string."""
+    if value is None or isinstance(value, bool):
+        return None
+    normalized = str(value).strip()
+    return normalized or None
 
 
 def _to_non_negative_float(value: Any, default: float) -> float:
@@ -462,7 +471,11 @@ async def main():
         include_founder_descriptions = _to_bool(input_data.get('includeFounderDescriptions'), default=True)
         include_job_details = _to_bool(input_data.get('includeJobDetails'), default=True)
         rate_limit_delay = _to_non_negative_float(input_data.get('rateLimitDelay'), default=1.5)
-        
+        notion_connector = _to_optional_str(input_data.get('notionConnector'))
+        notion_data_source_id = _to_optional_str(input_data.get('notionDataSourceId'))
+        notion_max_rows = _to_optional_int(input_data.get('notionMaxRows'))
+        notion_debug_schema = _to_bool(input_data.get('notionDebugSchema'), default=False)
+
         logger.info("🚀 Starting YC Jobs Scraper")
         logger.info(f"⚙️ Input: maxCompanies={max_companies}, includeJobDetails={include_job_details}, filters={input_data}")
         
@@ -497,10 +510,27 @@ async def main():
                 results.append(result)
         
         logger.info(f"🎉 Completed scraping. Processed {len(results)} companies")
-        
+
+        # Optionally push results into the user's Notion database via an MCP
+        # connector. Runs after the dataset is already filled, so a Notion
+        # failure can never cost the user their scrape.
+        notion_pages_created = 0
+        if notion_connector:
+            if notion_data_source_id:
+                notion_pages_created = await sync_jobs_to_notion(
+                    results,
+                    connector_id=notion_connector,
+                    data_source_id=notion_data_source_id,
+                    max_rows=notion_max_rows,
+                    debug_schema=notion_debug_schema
+                )
+            else:
+                logger.warning("⚠️ Notion connector selected but notionDataSourceId is empty - skipping Notion sync")
+
         # Set output summary
         await actor.set_value('OUTPUT', {
             'totalCompanies': len(results),
             'totalJobs': sum(len(r.jobs) for r in results),
-            'totalFounders': sum(len(r.founders) for r in results)
+            'totalFounders': sum(len(r.founders) for r in results),
+            'notionPagesCreated': notion_pages_created
         })

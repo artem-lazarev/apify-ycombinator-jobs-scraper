@@ -66,6 +66,45 @@
       "default": 1.5,
       "editor": "number",
       "prefill": 1.0
+    },
+    "notionConnector": {
+      "title": "Notion connector",
+      "type": "string",
+      "description": "Optional. Write every scraped job straight into a Notion database as a new page. Your Notion credentials stay on Apify and never reach this Actor.",
+      "resourceType": "mcpConnector",
+      "nullable": true,
+      "sectionCaption": "Notion output",
+      "sectionDescription": "Send results to a Notion database instead of exporting the dataset by hand. Authorize a Notion connector once under Settings > API & Integrations, then pick it here.",
+      "mcpServers": [
+        {
+          "url": "https://mcp.notion.com/mcp",
+          "tools": {
+            "required": ["notion-create-pages", "notion-fetch"]
+          }
+        }
+      ]
+    },
+    "notionDataSourceId": {
+      "title": "Notion data source ID",
+      "type": "string",
+      "description": "Data source to write jobs into, e.g. collection://3b9c6736-e91f-8087-808a-000ba66b1ae4. This is NOT the database ID - a Notion database can contain several data sources, and pages are parented on a data source. Required when a Notion connector is selected.",
+      "editor": "textfield",
+      "nullable": true
+    },
+    "notionMaxRows": {
+      "title": "Max jobs to write to Notion",
+      "type": "integer",
+      "description": "Safety cap on how many job pages get created in one run. Leave empty to write every scraped job.",
+      "editor": "number",
+      "nullable": true,
+      "minimum": 1
+    },
+    "notionDebugSchema": {
+      "title": "Dump Notion tool schemas",
+      "type": "boolean",
+      "description": "Diagnostic: write the connector's tool schemas to the NOTION_TOOL_SCHEMA key-value record and skip writing pages.",
+      "default": false,
+      "editor": "hidden"
     }
   }
 }
