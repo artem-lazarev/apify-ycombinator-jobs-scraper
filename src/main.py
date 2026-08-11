@@ -472,8 +472,9 @@ async def main():
         include_job_details = _to_bool(input_data.get('includeJobDetails'), default=True)
         rate_limit_delay = _to_non_negative_float(input_data.get('rateLimitDelay'), default=1.5)
         notion_connector = _to_optional_str(input_data.get('notionConnector'))
-        notion_database_id = _to_optional_str(input_data.get('notionDatabaseId'))
+        notion_data_source_id = _to_optional_str(input_data.get('notionDataSourceId'))
         notion_max_rows = _to_optional_int(input_data.get('notionMaxRows'))
+        notion_debug_schema = _to_bool(input_data.get('notionDebugSchema'), default=False)
 
         logger.info("🚀 Starting YC Jobs Scraper")
         logger.info(f"⚙️ Input: maxCompanies={max_companies}, includeJobDetails={include_job_details}, filters={input_data}")
@@ -515,15 +516,16 @@ async def main():
         # failure can never cost the user their scrape.
         notion_pages_created = 0
         if notion_connector:
-            if notion_database_id:
+            if notion_data_source_id:
                 notion_pages_created = await sync_jobs_to_notion(
                     results,
                     connector_id=notion_connector,
-                    database_id=notion_database_id,
-                    max_rows=notion_max_rows
+                    data_source_id=notion_data_source_id,
+                    max_rows=notion_max_rows,
+                    debug_schema=notion_debug_schema
                 )
             else:
-                logger.warning("⚠️ Notion connector selected but notionDatabaseId is empty - skipping Notion sync")
+                logger.warning("⚠️ Notion connector selected but notionDataSourceId is empty - skipping Notion sync")
 
         # Set output summary
         await actor.set_value('OUTPUT', {
