@@ -155,6 +155,26 @@ class TestScraperResilience:
         )
 
 
+class TestLocationParsing:
+    """A comma in the job title used to leak into the location field."""
+
+    def test_title_with_comma_is_not_treated_as_a_location(self):
+        from src.parsers import _looks_like_title
+
+        assert _looks_like_title("Senior Account Executive, Korea",
+                                 "Senior Account Executive, Korea")
+        assert _looks_like_title("Engineering Manager, Guides",
+                                 "Engineering Manager, Guides & Surveys")
+
+    def test_real_locations_are_kept(self):
+        from src.parsers import _looks_like_title
+
+        assert not _looks_like_title("Columbia, MD, US / Remote (US)",
+                                     "Account Executive - Hybrid")
+        assert not _looks_like_title("San Francisco, CA", "Software Engineer")
+        assert not _looks_like_title("Remote (US)", "Staff Software Engineer, SMS Team")
+
+
 class TestMainAndProcessingResilience:
     def test_filter_companies_handles_invalid_entries_and_filters(self):
         companies = [

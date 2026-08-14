@@ -517,6 +517,20 @@ def _extract_jobs_from_company_page(soup: BeautifulSoup) -> List[Dict]:
     return jobs
 
 
+def _looks_like_title(location: str, title: Optional[str]) -> bool:
+    """True when a 'location' match is really part of the job title.
+
+    YC job cards put the title and the location in the same block of text, and
+    the loosest location pattern ("Capitalized, Capitalized") happily matches a
+    title such as "Product Engineer, New Products".
+    """
+    if not title or not location:
+        return False
+    normalized_title = ' '.join(title.split()).lower()
+    normalized_location = ' '.join(location.split()).lower()
+    return normalized_location in normalized_title
+
+
 def _extract_job_from_card(card: Tag, job_id: str, title: str) -> Optional[Dict]:
     """Extract job information from a job card on the company page."""
     job = {
@@ -572,13 +586,20 @@ def _extract_job_from_card(card: Tag, job_id: str, title: str) -> Optional[Dict]
         r'([A-Z][a-zA-Z\s]+,\s*[A-Z][a-zA-Z\s]+)',  # City, State/Country
     ]
     for pattern in location_patterns:
-        match = re.search(pattern, card_text)
-        if match:
+        for match in re.finditer(pattern, card_text):
             location = match.group(1).strip()
-            # Exclude things that look like locations but aren't
-            if location not in ['Any', 'Apply Now']:
-                job['location'] = location
-                break
+            # Exclude things that look like locations but aren't. The last
+            # pattern is just "Capitalized, Capitalized", which also matches job
+            # titles carrying a comma ("Senior Account Executive, Korea"), so
+            # reject anything the title already contains.
+            if location in ['Any', 'Apply Now']:
+                continue
+            if _looks_like_title(location, title):
+                continue
+            job['location'] = location
+            break
+        if job['location']:
+            break
     
     # Extract salary - patterns like "$140K - $250K" or "£80K - £150K GBP"
     salary_match = re.search(r'[\$£€](\d+)K?\s*[-–]\s*[\$£€]?(\d+)K?(?:\s*(USD|GBP|EUR))?', card_text, re.IGNORECASE)
