@@ -31,3 +31,6 @@ storage/datasets/
 
 
 article-draft.md
+
+# Article screenshots — not part of the Actor source
+*.png
