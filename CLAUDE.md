@@ -1,0 +1,1 @@
+use source .venv/bin/activate  (virtual environment) if running python scripts

@@ -5,10 +5,12 @@ from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from mcp.types import Tool
 
 from src.models import Company, CompanyOutput, Equity, Job, Salary
 from src.notion_sync import (
     CREATE_PAGES_TOOL,
+    _dump_tool_schemas,
     _tool_error_text,
     build_job_rows,
     parse_data_source_id,
@@ -17,7 +19,7 @@ from src.notion_sync import (
 )
 
 PROXY_ENV = {
-    'APIFY_MCP_PROXY_URL': 'https://mcp-proxy.apify.com',
+    'ACTOR_MCP_CONNECTOR_BASE_URL': 'https://mcp-proxy.apify.com',
     'APIFY_TOKEN': 'apify_api_test',
 }
 
@@ -86,7 +88,7 @@ def _patch_transport(session):
     return (
         patch('src.notion_sync.streamable_http_client', return_value=transport),
         patch('src.notion_sync.ClientSession', return_value=session),
-        patch('src.notion_sync.httpx.AsyncClient', return_value=http_client),
+        patch('src.notion_sync.httpx2.AsyncClient', return_value=http_client),
     )
 
 
@@ -248,6 +250,32 @@ class TestToolErrorText:
         assert _tool_error_text(_ToolResult(is_error=True)) == 'unknown error'
 
 
+class TestDumpToolSchemas:
+    async def test_reads_input_schema_and_saves_it_under_the_wire_alias(self):
+        """input_schema is the attribute; inputSchema is only the JSON alias.
+
+        Built against a real mcp.types.Tool on purpose: a MagicMock answers to
+        both spellings, so it would happily hide a getattr on the wrong one.
+        """
+        schema = {'type': 'object', 'properties': {'pages': {'type': 'array'}}}
+        tool = Tool(name=CREATE_PAGES_TOOL, description='Create pages', inputSchema=schema)
+        assert not hasattr(tool, 'inputSchema'), 'the alias is not readable as an attribute'
+
+        with patch('apify.Actor') as actor:
+            actor.set_value = AsyncMock()
+            await _dump_tool_schemas([tool])
+
+        key, payload = actor.set_value.await_args.args
+        assert key == 'NOTION_TOOL_SCHEMA'
+        assert payload == [
+            {
+                'name': CREATE_PAGES_TOOL,
+                'description': 'Create pages',
+                'inputSchema': schema,
+            }
+        ]
+
+
 class TestSyncJobsToNotion:
     async def test_skips_cleanly_when_proxy_env_missing(self):
         """Local runs have no MCP proxy - must short-circuit, not raise."""
@@ -321,7 +349,7 @@ class TestSyncJobsToNotion:
 
     async def test_transport_error_does_not_propagate(self):
         with patch.dict('os.environ', PROXY_ENV, clear=True):
-            with patch('src.notion_sync.httpx.AsyncClient', side_effect=RuntimeError('boom')):
+            with patch('src.notion_sync.httpx2.AsyncClient', side_effect=RuntimeError('boom')):
                 created = await sync_jobs_to_notion(
                     [_output()], connector_id='conn_1', data_source_id='collection://db_1'
                 )
@@ -337,7 +365,7 @@ class TestSyncJobsToNotion:
         )
 
         with patch.dict('os.environ', PROXY_ENV, clear=True):
-            with patch('src.notion_sync.httpx.AsyncClient') as http_client:
+            with patch('src.notion_sync.httpx2.AsyncClient') as http_client:
                 created = await sync_jobs_to_notion(
                     [empty], connector_id='conn_1', data_source_id='collection://db_1'
                 )

@@ -34,3 +34,9 @@ article-draft.md
 
 # Article screenshots — not part of the Actor source
 *.png
+
+# Article drafts and editorial workflow artifacts — not part of the Actor source
+article-v3.md
+article-review/
+.article-revision-blue/
+.article-workflow-edit/
