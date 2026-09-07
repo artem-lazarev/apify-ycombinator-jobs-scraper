@@ -1,8 +1,9 @@
 """Write scraped YC jobs into Notion through an Apify MCP connector.
 
-The Actor never holds a Notion token. Apify injects APIFY_MCP_PROXY_URL and
-APIFY_TOKEN into every run; we speak MCP to the proxy with the run token, and
-the proxy swaps in the user's Notion credential server-side before forwarding.
+The Actor never holds a Notion token. Apify injects
+ACTOR_MCP_CONNECTOR_BASE_URL and APIFY_TOKEN into every run; we speak MCP to
+the proxy with the run token, and the proxy swaps in the user's Notion
+credential server-side before forwarding.
 """
 import json
 import logging
@@ -10,7 +11,7 @@ import os
 import re
 from typing import Any, Dict, Iterator, List, Optional, Sequence
 
-import httpx
+import httpx2
 from mcp import ClientSession
 from mcp.client.streamable_http import streamable_http_client
 
@@ -220,9 +221,13 @@ async def _fetch_data_source_schema(session: Any, source_id: str) -> Dict[str, s
 async def _dump_tool_schemas(tools: Any) -> None:
     """Save the connector's tool schemas to the key-value store.
 
-    Apify Console truncates long log lines, so a tool's inputSchema is
+    Apify Console truncates long log lines, so a tool's input schema is
     effectively unreadable in the log. Writing it to the KV store is the only
     practical way to see what a tool actually expects.
+
+    Note the two spellings: the SDK attribute is `input_schema`, while
+    `inputSchema` is the wire alias we keep for the saved record. Reading
+    `tool.inputSchema` returns nothing at all and dumps a file full of nulls.
     """
     from apify import Actor
 
@@ -230,7 +235,7 @@ async def _dump_tool_schemas(tools: Any) -> None:
         {
             'name': tool.name,
             'description': getattr(tool, 'description', None),
-            'inputSchema': getattr(tool, 'inputSchema', None),
+            'inputSchema': getattr(tool, 'input_schema', None),
         }
         for tool in tools
     ]
@@ -250,12 +255,12 @@ async def sync_jobs_to_notion(
     Never raises: the scrape has already succeeded by the time this runs, so a
     Notion problem is logged and swallowed rather than failing the whole run.
     """
-    proxy_url = os.environ.get('APIFY_MCP_PROXY_URL')
+    proxy_url = os.environ.get('ACTOR_MCP_CONNECTOR_BASE_URL')
     token = os.environ.get('APIFY_TOKEN')
 
     if not proxy_url or not token:
         logger.warning(
-            "⚠️ APIFY_MCP_PROXY_URL/APIFY_TOKEN not set - skipping Notion sync. "
+            "⚠️ ACTOR_MCP_CONNECTOR_BASE_URL/APIFY_TOKEN not set - skipping Notion sync. "
             "MCP connectors only resolve on the Apify platform, not in local runs."
         )
         return 0
@@ -273,9 +278,9 @@ async def sync_jobs_to_notion(
     created = 0
 
     try:
-        async with httpx.AsyncClient(
+        async with httpx2.AsyncClient(
             headers={'Authorization': f'Bearer {token}'},
-            timeout=httpx.Timeout(60.0),
+            timeout=httpx2.Timeout(60.0),
         ) as http_client:
             # mcp 2.x yields exactly (read_stream, write_stream). The Apify docs
             # snippet unpacks three values, which is the mcp 1.x shape and raises

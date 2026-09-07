@@ -2,6 +2,25 @@
 
 All notable changes to the YC Jobs Scraper Actor will be documented in this file.
 
+## [1.1.1] - 2026-09-08
+
+### Fixed
+- The Notion sync reads the connector proxy base URL from
+  `ACTOR_MCP_CONNECTOR_BASE_URL`. It previously read `APIFY_MCP_PROXY_URL`,
+  which the platform no longer sets, so a run with a connector selected
+  skipped the sync with a "not set" warning instead of writing to Notion.
+- Tool schemas saved to `NOTION_TOOL_SCHEMA` now hold the actual schemas. The
+  dump read `tool.inputSchema`, which does not exist on the Python SDK's `Tool`
+  object - the attribute is `input_schema` - so every entry was saved as null.
+  The record's JSON key is unchanged.
+
+### Changed
+- Declares `httpx2` rather than `httpx`. `mcp` 2.x depends on httpx2, and its
+  streamable-HTTP transport expects an `httpx2.AsyncClient`.
+
+### Notes
+- Runs without a connector are unaffected.
+
 ## [1.1.0] - 2026-08-11
 
 ### Added
